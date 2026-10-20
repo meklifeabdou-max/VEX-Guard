@@ -15,7 +15,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
 if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  console.error("❌ تحقق من DISCORD_TOKEN و CLIENT_ID و GUILD_ID");
+  console.error("❌ تأكد من DISCORD_TOKEN و CLIENT_ID و GUILD_ID");
   process.exit(1);
 }
 
@@ -46,7 +46,7 @@ const commands = [
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true))
     .addStringOption(o => o.setName("reason").setDescription("السبب")),
 
-  new SlashCommandBuilder().setName("unban").setDescription("فك الحظر عن مستخدم")
+  new SlashCommandBuilder().setName("unban").setDescription("فك حظر مستخدم")
     .addStringOption(o => o.setName("userid").setDescription("معرف المستخدم").setRequired(true)),
 
   new SlashCommandBuilder().setName("timeout").setDescription("تقييد عضو بالدقائق")
@@ -101,15 +101,15 @@ const commands = [
         { name: "مقص ✂️", value: "scissors" }
       )),
 
-  new SlashCommandBuilder().setName("guess").setDescription("ابدأ لعبة تخمين الرقم أو أرسل تخمينك")
+  new SlashCommandBuilder().setName("guess").setDescription("ابدأ تخمين الرقم أو أرسل تخمينك")
     .addIntegerOption(o => o.setName("number").setDescription("رقم من 1 إلى 10").setMinValue(1).setMaxValue(10)),
 
   new SlashCommandBuilder().setName("math").setDescription("ابدأ تحدي الحساب أو أرسل إجابتك")
     .addIntegerOption(o => o.setName("answer").setDescription("إجابتك")),
 
-  new SlashCommandBuilder().setName("dice").setDescription("ارمِ النرد 🎲"),
+  new SlashCommandBuilder().setName("dice").setDescription("ارمِ النرد"),
 
-  new SlashCommandBuilder().setName("coinflip").setDescription("وجه أو كتابة 🪙")
+  new SlashCommandBuilder().setName("coinflip").setDescription("وجه أو كتابة")
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -126,25 +126,40 @@ client.on("interactionCreate", async interaction => {
   const name = interaction.commandName;
   const guild = interaction.guild;
 
-  const reply = async content =>
-    interaction.reply({ content, ephemeral: true });
+  // كل الردود هنا علنية في القناة
+  const reply = content => interaction.reply({
+    content,
+    allowedMentions: { parse: [] }
+  });
 
   try {
-    // الألعاب متاحة لجميع الأعضاء
+    if (!guild) return reply("❌ هذا الأمر يعمل داخل السيرفر فقط.");
+
+    // ===== الألعاب =====
+
     if (name === "rps") {
-      const options = ["rock", "paper", "scissors"];
+      const choices = ["rock", "paper", "scissors"];
       const emoji = { rock: "🪨", paper: "📄", scissors: "✂️" };
-      const label = { rock: "حجر", paper: "ورقة", scissors: "مقص" };
+      const labels = { rock: "حجر", paper: "ورقة", scissors: "مقص" };
+
       const player = interaction.options.getString("choice");
-      const bot = options[Math.floor(Math.random() * 3)];
+      const bot = choices[Math.floor(Math.random() * choices.length)];
 
-      let result = player === bot ? "🤝 تعادل!" :
-        ((player === "rock" && bot === "scissors") ||
-         (player === "paper" && bot === "rock") ||
-         (player === "scissors" && bot === "paper"))
-          ? "🏆 فزت!" : "😅 فزت عليك هذه المرة!";
+      let result = "🤝 تعادل!";
+      if (
+        (player === "rock" && bot === "scissors") ||
+        (player === "paper" && bot === "rock") ||
+        (player === "scissors" && bot === "paper")
+      ) {
+        result = "🏆 فزت يا بطل!";
+      } else if (player !== bot) {
+        result = "😅 فزت عليك هذه المرة!";
+      }
 
-      return reply(`${emoji[player]} أنت: ${label[player]}\n${emoji[bot]} البوت: ${label[bot]}\n${result}`);
+      return reply(
+        `${emoji[player]} أنت: ${labels[player]}\n` +
+        `${emoji[bot]} البوت: ${labels[bot]}\n${result}`
+      );
     }
 
     if (name === "guess") {
@@ -154,17 +169,20 @@ client.on("interactionCreate", async interaction => {
       if (number === null) {
         const secret = Math.floor(Math.random() * 10) + 1;
         guessGames.set(key, secret);
-        return reply("🔢 اختر رقمًا من 1 إلى 10 باستعمال `/guess number:`");
+        return reply("🔢 بدأت اللعبة! خمن رقمًا من 1 إلى 10 باستعمال `/guess number:`");
       }
 
       const secret = guessGames.get(key);
       if (secret === undefined) {
-        return reply("ابدأ أولًا باستعمال `/guess` من دون رقم.");
+        return reply("ابدأ اللعبة أولًا باستعمال `/guess` من دون رقم.");
       }
 
       guessGames.delete(key);
-      if (number === secret) return reply("🎉 صحيح! أحسنت يا بطل!");
-      return reply(`😄 ليس الرقم الصحيح! كان الرقم ${secret}. ابدأ جولة جديدة بـ \`/guess\`.`);
+      if (number === secret) {
+        return reply("🎉 صحيح! أحسنت يا بطل!");
+      }
+
+      return reply(`😄 تخمين خاطئ! الرقم كان ${secret}. ابدأ جولة جديدة بـ \`/guess\`.`);
     }
 
     if (name === "math") {
@@ -175,32 +193,44 @@ client.on("interactionCreate", async interaction => {
         const a = Math.floor(Math.random() * 20) + 1;
         const b = Math.floor(Math.random() * 20) + 1;
         mathGames.set(key, { answer: a + b, question: `${a} + ${b}` });
-        return reply(`🧠 **تحدي الحساب**\nكم يساوي **${a} + ${b}**؟\nأرسل إجابتك باستعمال \`/math answer:\``);
+
+        return reply(
+          `🧠 **تحدي الحساب!**\nكم يساوي **${a} + ${b}**؟\n` +
+          "أرسل إجابتك باستعمال `/math answer:`"
+        );
       }
 
       const game = mathGames.get(key);
-      if (!game) return reply("ابدأ تحديًا أولًا باستعمال `/math` من دون إجابة.");
-      mathGames.delete(key);
+      if (!game) {
+        return reply("ابدأ تحديًا أولًا باستعمال `/math` من دون إجابة.");
+      }
 
-      return reply(answer === game.answer
-        ? "🎉 إجابة صحيحة! عبقري!"
-        : `❌ إجابة خاطئة! ${game.question} = ${game.answer}`);
+      mathGames.delete(key);
+      return reply(
+        answer === game.answer
+          ? "🎉 إجابة صحيحة! عبقري!"
+          : `❌ إجابة خاطئة! ${game.question} = ${game.answer}`
+      );
     }
 
     if (name === "dice") {
-      return reply(`🎲 النتيجة: **${Math.floor(Math.random() * 6) + 1}**`);
+      return reply(`🎲 رميت النرد: **${Math.floor(Math.random() * 6) + 1}**`);
     }
 
     if (name === "coinflip") {
       return reply(`🪙 النتيجة: **${Math.random() < 0.5 ? "وجه" : "كتابة"}**`);
     }
 
-    if (name === "ping") return reply(`🏓 Ping: ${client.ws.ping} ms`);
+    // ===== الأوامر العامة =====
+
+    if (name === "ping") {
+      return reply(`🏓 Ping: ${client.ws.ping} ms`);
+    }
 
     if (name === "help") {
       const embed = new EmbedBuilder()
         .setColor(0x5865F2)
-        .setTitle("🛡️ VEX Guard | 25 أمرًا")
+        .setTitle("🛡️ VEX Guard | الأوامر")
         .setDescription(
           "**الإدارة**\n" +
           "`/warn` `/warnings` `/kick` `/ban` `/unban`\n" +
@@ -210,13 +240,16 @@ client.on("interactionCreate", async interaction => {
           "**المعلومات**\n`/userinfo` `/serverinfo` `/avatar` `/ping`\n\n" +
           "**الألعاب**\n`/rps` `/guess` `/math` `/dice` `/coinflip`"
         );
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (name === "userinfo") {
       const user = interaction.options.getUser("member") || interaction.user;
       const member = await guild.members.fetch(user.id).catch(() => null);
-      const embed = new EmbedBuilder().setColor(0x5865F2)
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
         .setTitle(`معلومات ${user.username}`)
         .setThumbnail(user.displayAvatarURL({ size: 512 }))
         .addFields(
@@ -224,14 +257,20 @@ client.on("interactionCreate", async interaction => {
           { name: "ID", value: user.id, inline: true },
           { name: "إنشاء الحساب", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>` }
         );
+
       if (member?.joinedTimestamp) {
-        embed.addFields({ name: "الانضمام", value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>` });
+        embed.addFields({
+          name: "تاريخ الانضمام",
+          value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>`
+        });
       }
+
       return interaction.reply({ embeds: [embed] });
     }
 
     if (name === "serverinfo") {
-      const embed = new EmbedBuilder().setColor(0x5865F2)
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
         .setTitle(guild.name)
         .setThumbnail(guild.iconURL({ size: 512 }))
         .addFields(
@@ -239,18 +278,23 @@ client.on("interactionCreate", async interaction => {
           { name: "عدد الأعضاء", value: String(guild.memberCount), inline: true },
           { name: "تاريخ الإنشاء", value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true }
         );
+
       return interaction.reply({ embeds: [embed] });
     }
 
     if (name === "avatar") {
       const user = interaction.options.getUser("member") || interaction.user;
-      const embed = new EmbedBuilder().setColor(0x5865F2)
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
         .setTitle(`صورة ${user.username}`)
         .setImage(user.displayAvatarURL({ size: 1024 }));
+
       return interaction.reply({ embeds: [embed] });
     }
 
-    const perms = {
+    // ===== صلاحيات الإدارة =====
+
+    const permissions = {
       warn: PermissionFlagsBits.ModerateMembers,
       warnings: PermissionFlagsBits.ModerateMembers,
       kick: PermissionFlagsBits.KickMembers,
@@ -268,31 +312,45 @@ client.on("interactionCreate", async interaction => {
       unrole: PermissionFlagsBits.ManageRoles
     };
 
-    if (perms[name] && !interaction.memberPermissions.has(perms[name])) {
+    if (
+      permissions[name] &&
+      !interaction.memberPermissions.has(permissions[name])
+    ) {
       return reply("❌ لا تملك الصلاحية اللازمة لهذا الأمر.");
     }
 
     if (name === "warn") {
       const user = interaction.options.getUser("member");
-      if (user.id === interaction.user.id) return reply("❌ لا يمكنك تحذير نفسك.");
+      if (user.id === interaction.user.id) {
+        return reply("❌ لا يمكنك تحذير نفسك.");
+      }
+
       const reason = interaction.options.getString("reason");
       const key = `${guild.id}:${user.id}`;
       const list = warnings.get(key) || [];
+
       list.push({ reason, by: interaction.user.tag });
       warnings.set(key, list);
-      return reply(`⚠️ تم تحذير ${user.tag}\nالسبب: ${reason}\nعدد التحذيرات: ${list.length}`);
+
+      return reply(
+        `⚠️ تم تحذير ${user.tag}\nالسبب: ${reason}\nعدد التحذيرات: ${list.length}`
+      );
     }
 
     if (name === "warnings") {
       const user = interaction.options.getUser("member");
       const list = warnings.get(`${guild.id}:${user.id}`) || [];
-      return reply(list.length
-        ? `⚠️ تحذيرات ${user.tag}:\n${list.map((w, i) => `${i + 1}. ${w.reason} — ${w.by}`).join("\n")}`
-        : `✅ لا توجد تحذيرات مسجلة لـ ${user.tag}.`);
+
+      return reply(
+        list.length
+          ? `⚠️ تحذيرات ${user.tag}:\n${list.map((w, i) => `${i + 1}. ${w.reason} — ${w.by}`).join("\n")}`
+          : `✅ لا توجد تحذيرات مسجلة لـ ${user.tag}.`
+      );
     }
 
     if (["kick", "ban", "timeout", "untimeout"].includes(name)) {
       const user = interaction.options.getUser("member");
+
       if (user.id === interaction.user.id || user.id === client.user.id) {
         return reply("❌ لا يمكنك تنفيذ هذا الأمر على نفسك أو على البوت.");
       }
@@ -301,22 +359,38 @@ client.on("interactionCreate", async interaction => {
       if (!member) return reply("❌ العضو غير موجود في السيرفر.");
 
       if (name === "kick") {
-        if (!member.kickable) return reply("❌ لا أستطيع طرد هذا العضو. تحقق من ترتيب الرتب.");
+        if (!member.kickable) {
+          return reply("❌ لا أستطيع طرد هذا العضو. تحقق من ترتيب الرتب.");
+        }
+
         await member.kick(interaction.options.getString("reason") || "بدون سبب");
         return reply(`👢 تم طرد ${user.tag}.`);
       }
 
       if (name === "ban") {
-        if (!member.bannable) return reply("❌ لا أستطيع حظر هذا العضو. تحقق من ترتيب الرتب.");
-        await member.ban({ reason: interaction.options.getString("reason") || "بدون سبب" });
+        if (!member.bannable) {
+          return reply("❌ لا أستطيع حظر هذا العضو. تحقق من ترتيب الرتب.");
+        }
+
+        await member.ban({
+          reason: interaction.options.getString("reason") || "بدون سبب"
+        });
+
         return reply(`🔨 تم حظر ${user.tag}.`);
       }
 
-      if (!member.moderatable) return reply("❌ لا أستطيع تعديل تقييد هذا العضو.");
+      if (!member.moderatable) {
+        return reply("❌ لا أستطيع تعديل تقييد هذا العضو.");
+      }
 
       if (name === "timeout") {
         const minutes = interaction.options.getInteger("minutes");
-        await member.timeout(minutes * 60000, interaction.options.getString("reason") || "بدون سبب");
+
+        await member.timeout(
+          minutes * 60000,
+          interaction.options.getString("reason") || "بدون سبب"
+        );
+
         return reply(`⏳ تم تقييد ${user.tag} لمدة ${minutes} دقيقة.`);
       }
 
@@ -326,43 +400,68 @@ client.on("interactionCreate", async interaction => {
 
     if (name === "unban") {
       const id = interaction.options.getString("userid").trim();
-      if (!/^\d{17,20}$/.test(id)) return reply("❌ أدخل User ID صحيحًا.");
+
+      if (!/^\d{17,20}$/.test(id)) {
+        return reply("❌ أدخل User ID صحيحًا.");
+      }
+
       await guild.members.unban(id);
       return reply(`✅ تم فك الحظر عن ${id}.`);
     }
 
     if (name === "clear") {
       const amount = interaction.options.getInteger("amount");
+
       const deleted = await interaction.channel.bulkDelete(amount, true);
-      return reply(`🧹 تم حذف ${deleted.size} رسالة. لا يمكن حذف الرسائل الأقدم من 14 يومًا بهذا الأمر.`);
+      return reply(`🧹 تم حذف ${deleted.size} رسالة.`);
     }
 
     if (name === "announce") {
       const channel = interaction.options.getChannel("channel");
       const message = interaction.options.getString("message");
+
       await channel.send({
-        embeds: [new EmbedBuilder().setColor(0x5865F2).setTitle("📢 إعلان").setDescription(message)]
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle("📢 إعلان")
+            .setDescription(message)
+        ],
+        allowedMentions: { parse: [] }
       });
+
       return reply("✅ تم إرسال الإعلان.");
     }
 
     if (name === "say") {
       const message = interaction.options.getString("message");
-      await interaction.channel.send({ content: message, allowedMentions: { parse: [] } });
+
+      await interaction.channel.send({
+        content: message,
+        allowedMentions: { parse: [] }
+      });
+
       return reply("✅ تم إرسال الرسالة.");
     }
 
     if (name === "lock" || name === "unlock") {
       const channel = interaction.options.getChannel("channel") || interaction.channel;
+
       await channel.permissionOverwrites.edit(guild.roles.everyone, {
         SendMessages: name === "lock" ? false : null
       });
-      return reply(name === "lock" ? `🔒 تم قفل ${channel}.` : `🔓 تم فتح ${channel}.`);
+
+      return reply(
+        name === "lock"
+          ? `🔒 تم قفل ${channel}.`
+          : `🔓 تم فتح ${channel}.`
+      );
     }
 
     if (name === "slowmode") {
       const channel = interaction.options.getChannel("channel") || interaction.channel;
       const seconds = interaction.options.getInteger("seconds");
+
       await channel.setRateLimitPerUser(seconds);
       return reply(`⏱️ تم ضبط Slowmode إلى ${seconds} ثانية في ${channel}.`);
     }
@@ -371,8 +470,13 @@ client.on("interactionCreate", async interaction => {
       const user = interaction.options.getUser("member");
       const role = interaction.options.getRole("role");
 
-      if (role.managed || role.id === guild.id) return reply("❌ لا يمكن تعديل هذه الرتبة.");
-      if (!role.editable) return reply("❌ رتبة البوت يجب أن تكون أعلى من الرتبة المطلوبة.");
+      if (role.managed || role.id === guild.id) {
+        return reply("❌ لا يمكن تعديل هذه الرتبة.");
+      }
+
+      if (!role.editable) {
+        return reply("❌ يجب أن تكون رتبة البوت أعلى من الرتبة المطلوبة.");
+      }
 
       const member = await guild.members.fetch(user.id).catch(() => null);
       if (!member) return reply("❌ العضو غير موجود في السيرفر.");
@@ -385,13 +489,22 @@ client.on("interactionCreate", async interaction => {
       await member.roles.remove(role);
       return reply(`✅ تم إزالة رتبة ${role.name} من ${user.tag}.`);
     }
+
   } catch (error) {
     console.error(`❌ خطأ في /${name}:`, error);
+
     const message = "❌ تعذّر تنفيذ الأمر. تحقق من صلاحيات البوت وترتيب الرتب.";
+
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: message, ephemeral: true }).catch(() => {});
+      await interaction.followUp({
+        content: message,
+        allowedMentions: { parse: [] }
+      }).catch(() => {});
     } else {
-      await interaction.reply({ content: message, ephemeral: true }).catch(() => {});
+      await interaction.reply({
+        content: message,
+        allowedMentions: { parse: [] }
+      }).catch(() => {});
     }
   }
 });
@@ -399,11 +512,13 @@ client.on("interactionCreate", async interaction => {
 async function start() {
   try {
     console.log("⚙️ جاري تسجيل 25 أمرًا...");
+
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
       { body: commands }
     );
-    console.log("✅ تم تسجيل 25 أمرًا بنجاح.");
+
+    console.log("✅ تم تسجيل الأوامر بنجاح.");
   } catch (error) {
     console.error("❌ فشل تسجيل الأوامر:", error.message);
   }
