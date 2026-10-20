@@ -138,85 +138,119 @@ const commands = Object.entries(commandDescriptions).map(([name, description]) =
     .setName(name)
     .setDescription(description);
 
-  if (["عضو", "أفاتار", "طرد", "حظر", "تحذير", "مهلة",
-       "إنهاء_المهلة", "لقب", "أضف_رتبة", "احذف_رتبة", "انضمام"].includes(name)) {
+  if ([
+    "عضو", "أفاتار", "طرد", "حظر", "تحذير", "مهلة",
+    "إنهاء_المهلة", "لقب", "أضف_رتبة", "احذف_رتبة", "انضمام"
+  ].includes(name)) {
     cmd.addUserOption(o =>
-      o.setName("العضو").setDescription("اختر العضو").setRequired(false)
+      o.setName("العضو")
+        .setDescription("اختر العضو")
+        .setRequired(false)
     );
   }
 
-  if (["تحذير", "مهلة", "لقب", "إعلان", "رسالة", "اقتراح",
-       "موضوع", "طرد", "حظر"].includes(name)) {
+  if ([
+    "تحذير", "مهلة", "لقب", "إعلان", "رسالة",
+    "اقتراح", "موضوع", "طرد", "حظر"
+  ].includes(name)) {
     cmd.addStringOption(o =>
-      o.setName("النص").setDescription("النص أو السبب")
+      o.setName("النص")
+        .setDescription("النص أو السبب")
         .setRequired(["إعلان", "رسالة", "اقتراح", "موضوع"].includes(name))
     );
   }
 
   if (name === "مسح") {
     cmd.addIntegerOption(o =>
-      o.setName("العدد").setDescription("عدد الرسائل من 1 إلى 100")
-        .setMinValue(1).setMaxValue(100).setRequired(true)
+      o.setName("العدد")
+        .setDescription("عدد الرسائل من 1 إلى 100")
+        .setMinValue(1)
+        .setMaxValue(100)
+        .setRequired(true)
     );
   }
 
   if (name === "بطء") {
     cmd.addIntegerOption(o =>
-      o.setName("الثواني").setDescription("من 0 إلى 21600")
-        .setMinValue(0).setMaxValue(21600).setRequired(true)
+      o.setName("الثواني")
+        .setDescription("من 0 إلى 21600")
+        .setMinValue(0)
+        .setMaxValue(21600)
+        .setRequired(true)
     );
   }
 
   if (name === "إلغاء_حظر") {
     cmd.addStringOption(o =>
-      o.setName("المعرف").setDescription("معرف العضو").setRequired(true)
+      o.setName("المعرف")
+        .setDescription("معرف العضو")
+        .setRequired(true)
     );
   }
 
   if (name === "إنشاء_قناة") {
     cmd.addStringOption(o =>
-      o.setName("الاسم").setDescription("اسم القناة").setRequired(true)
+      o.setName("الاسم")
+        .setDescription("اسم القناة")
+        .setRequired(true)
     );
   }
 
   if (["أضف_رتبة", "احذف_رتبة"].includes(name)) {
     cmd.addStringOption(o =>
-      o.setName("اسم_الرتبة").setDescription("اسم الرتبة").setRequired(true)
+      o.setName("اسم_الرتبة")
+        .setDescription("اسم الرتبة")
+        .setRequired(true)
     );
   }
 
   if (name === "رقم") {
     cmd.addIntegerOption(o =>
-      o.setName("من").setDescription("الحد الأدنى").setRequired(false)
+      o.setName("من")
+        .setDescription("الحد الأدنى")
+        .setRequired(false)
     ).addIntegerOption(o =>
-      o.setName("إلى").setDescription("الحد الأعلى").setRequired(false)
+      o.setName("إلى")
+        .setDescription("الحد الأعلى")
+        .setRequired(false)
     );
   }
 
   if (name === "اختيار") {
     cmd.addStringOption(o =>
-      o.setName("الخيار_الأول").setDescription("الخيار الأول").setRequired(true)
+      o.setName("الخيار_الأول")
+        .setDescription("الخيار الأول")
+        .setRequired(true)
     ).addStringOption(o =>
-      o.setName("الخيار_الثاني").setDescription("الخيار الثاني").setRequired(true)
+      o.setName("الخيار_الثاني")
+        .setDescription("الخيار الثاني")
+        .setRequired(true)
     );
   }
 
   if (name === "تصويت") {
     cmd.addStringOption(o =>
-      o.setName("السؤال").setDescription("موضوع التصويت").setRequired(true)
+      o.setName("السؤال")
+        .setDescription("موضوع التصويت")
+        .setRequired(true)
     );
   }
 
   if (name === "تخمين") {
     cmd.addIntegerOption(o =>
-      o.setName("الرقم").setDescription("اختر رقمًا من 1 إلى 10")
-        .setMinValue(1).setMaxValue(10).setRequired(true)
+      o.setName("الرقم")
+        .setDescription("اختر رقمًا من 1 إلى 10")
+        .setMinValue(1)
+        .setMaxValue(10)
+        .setRequired(true)
     );
   }
 
   if (name === "فائز") {
     cmd.addStringOption(o =>
-      o.setName("المشاركون").setDescription("الأسماء مفصولة بفواصل").setRequired(true)
+      o.setName("المشاركون")
+        .setDescription("الأسماء مفصولة بفواصل")
+        .setRequired(true)
     );
   }
 
@@ -278,7 +312,10 @@ async function createTicket(i, type) {
   const user = i.user;
 
   if (!guild) {
-    return i.reply({ content: "افتح التكت داخل السيرفر.", ephemeral: true });
+    return i.reply({
+      content: "افتح التكت داخل السيرفر.",
+      ephemeral: true
+    });
   }
 
   const existing = guild.channels.cache.find(channel =>
@@ -323,9 +360,13 @@ async function createTicket(i, type) {
   ];
 
   for (const role of guild.roles.cache.values()) {
-    if (role.id !== guild.roles.everyone.id &&
-        (role.permissions.has(PermissionFlagsBits.ManageChannels) ||
-         role.permissions.has(PermissionFlagsBits.Administrator))) {
+    if (
+      role.id !== guild.roles.everyone.id &&
+      (
+        role.permissions.has(PermissionFlagsBits.ManageChannels) ||
+        role.permissions.has(PermissionFlagsBits.Administrator)
+      )
+    ) {
       overwrites.push({
         id: role.id,
         allow: [
@@ -365,7 +406,9 @@ async function createTicket(i, type) {
 
   await channel.send({
     content: `${user} مرحبًا بك! ${
-      type === "shop" ? "اكتب تفاصيل طلب الشراء." : "اشرح مشكلتك لفريق الإدارة."
+      type === "shop"
+        ? "اكتب تفاصيل طلب الشراء."
+        : "اشرح مشكلتك لفريق الإدارة."
     }`,
     embeds: [makeEmbed(
       type === "shop" ? "🛒 تكت الشراء" : "💬 تكت الدعم",
@@ -387,8 +430,18 @@ bot.once("ready", () => {
 bot.on("interactionCreate", async i => {
   try {
     if (i.isButton()) {
-      if (i.customId === "vex_ticket_support" ||
-          i.customId === "vex_ticket_shop") {
+      if (i.customId === "vote_yes" || i.customId === "vote_no") {
+        const label = i.customId === "vote_yes" ? "👍 نعم" : "👎 لا";
+        return i.reply({
+          content: `صوّتَّ بـ ${label}.`,
+          ephemeral: true
+        });
+      }
+
+      if (
+        i.customId === "vex_ticket_support" ||
+        i.customId === "vex_ticket_shop"
+      ) {
         return await createTicket(
           i,
           i.customId === "vex_ticket_shop" ? "shop" : "support"
@@ -399,7 +452,10 @@ bot.on("interactionCreate", async i => {
         const owner = i.channel?.topic?.match(/vex-owner=(\d+)/)?.[1];
 
         if (!i.channel || i.channel.type !== ChannelType.GuildText) {
-          return i.reply({ content: "هذه ليست قناة تكت.", ephemeral: true });
+          return i.reply({
+            content: "هذه ليست قناة تكت.",
+            ephemeral: true
+          });
         }
 
         if (i.user.id !== owner && !isStaff(i.member)) {
@@ -411,38 +467,66 @@ bot.on("interactionCreate", async i => {
 
         await i.reply("🔒 سيتم حذف التكت بعد 5 ثوانٍ.");
         const channel = i.channel;
+
         setTimeout(() => {
           channel.delete("Ticket closed").catch(console.error);
         }, 5000);
+
         return;
       }
 
       if (i.customId === "rjoin") {
         const game = roulette.get(i.guildId);
+
         if (!game) {
-          return i.reply({ content: "لا توجد روليت نشطة.", ephemeral: true });
+          return i.reply({
+            content: "لا توجد روليت نشطة.",
+            ephemeral: true
+          });
         }
+
         if (game.players.has(i.user.id)) {
-          return i.reply({ content: "أنت مشارك بالفعل.", ephemeral: true });
+          return i.reply({
+            content: "أنت مشارك بالفعل.",
+            ephemeral: true
+          });
         }
+
         game.players.set(i.user.id, i.user);
-        return i.reply({ content: "✅ انضممت للروليت.", ephemeral: true });
+
+        return i.reply({
+          content: "✅ انضممت للروليت.",
+          ephemeral: true
+        });
       }
 
       if (i.customId === "rdraw") {
         const game = roulette.get(i.guildId);
+
         if (!game) {
-          return i.reply({ content: "لا توجد روليت نشطة.", ephemeral: true });
+          return i.reply({
+            content: "لا توجد روليت نشطة.",
+            ephemeral: true
+          });
         }
+
         if (i.user.id !== game.hostId && !isStaff(i.member)) {
-          return i.reply({ content: "السحب لصاحب اللعبة أو الإدارة.", ephemeral: true });
+          return i.reply({
+            content: "السحب لصاحب اللعبة أو الإدارة.",
+            ephemeral: true
+          });
         }
+
         if (game.players.size < 2) {
-          return i.reply({ content: "يلزم مشاركان على الأقل.", ephemeral: true });
+          return i.reply({
+            content: "يلزم مشاركان على الأقل.",
+            ephemeral: true
+          });
         }
 
         const winner = pick([...game.players.values()]);
         roulette.delete(i.guildId);
+
         return i.update({
           embeds: [makeEmbed("🎡 الفائز", `🏆 الفائز هو ${winner}`)],
           components: []
@@ -461,7 +545,9 @@ bot.on("interactionCreate", async i => {
     const text = i.options.getString("النص");
     const reply = content => i.reply({ content });
 
-    if (name === "بلاغ") return await sendTicketPanel(i);
+    if (name === "بلاغ") {
+      return await sendTicketPanel(i);
+    }
 
     if (adminCommands.includes(name) && !isStaff(member)) {
       return i.reply({
@@ -473,6 +559,7 @@ bot.on("interactionCreate", async i => {
     if (["كت", "سؤال", "سؤال_إضافي"].includes(name)) {
       return reply("❓ " + pick(questions));
     }
+
     if (name === "صراحة") {
       return reply("🗣️ " + pick([
         "ما أكثر موقف مضحك حدث لك؟",
@@ -480,12 +567,16 @@ bot.on("interactionCreate", async i => {
         "ما اللعبة التي تحبها أكثر؟"
       ]));
     }
+
     if (["تحدي", "تحدي_جماعي", "تحدي_الأصدقاء"].includes(name)) {
       return reply("🔥 " + pick(dares));
     }
+
     if (name === "روليت") {
       if (!guild) return reply("هذا الأمر داخل السيرفر فقط.");
-      if (roulette.has(guild.id)) return reply("هناك روليت جارية بالفعل.");
+      if (roulette.has(guild.id)) {
+        return reply("هناك روليت جارية بالفعل.");
+      }
 
       roulette.set(guild.id, {
         hostId: i.user.id,
@@ -493,10 +584,14 @@ bot.on("interactionCreate", async i => {
       });
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("rjoin")
-          .setLabel("🎟️ انضمام").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("rdraw")
-          .setLabel("🎡 سحب الفائز").setStyle(ButtonStyle.Primary)
+        new ButtonBuilder()
+          .setCustomId("rjoin")
+          .setLabel("🎟️ انضمام")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("rdraw")
+          .setLabel("🎡 سحب الفائز")
+          .setStyle(ButtonStyle.Primary)
       );
 
       return i.reply({
@@ -504,79 +599,63 @@ bot.on("interactionCreate", async i => {
         components: [row]
       });
     }
+
     if (name === "روليت_مساعدة") {
       return reply("استخدم /روليت، ثم اضغط انضمام. يلزم مشاركان على الأقل.");
     }
-    if (name === "نرد") return reply("🎲 " + (1 + Math.floor(Math.random() * 6)));
-    if (name === "عملة") return reply("🪙 " + pick(["صورة", "كتابة"]));
+
+    if (name === "نرد") {
+      return reply("🎲 " + (1 + Math.floor(Math.random() * 6)));
+    }
+
+    if (name === "عملة") {
+      return reply("🪙 " + pick(["صورة", "كتابة"]));
+    }
+
     if (name === "حظ" || name === "نسبة") {
       return reply(`🍀 ${Math.floor(Math.random() * 101)}%`);
     }
-    if (name === "نكتة") return reply("😂 لماذا الكمبيوتر بارد؟ لأنه يترك النوافذ مفتوحة!");
-    if (name === "حقيقة") return reply("💡 الأخطبوط لديه ثلاثة قلوب.");
+
+    if (name === "نكتة") {
+      return reply("😂 لماذا الكمبيوتر بارد؟ لأنه يترك النوافذ مفتوحة!");
+    }
+
+    if (name === "حقيقة") {
+      return reply("💡 الأخطبوط لديه ثلاثة قلوب.");
+    }
+
     if (name === "لغز" || name === "فزورة") {
       return reply("🧩 ما الشيء الذي له أسنان ولا يعض؟ ||المشط||");
     }
-    if (name === "نصيحة") return reply("💙 ابدأ بخطوة صغيرة واستمر.");
+
+    if (name === "نصيحة") {
+      return reply("💙 ابدأ بخطوة صغيرة واستمر.");
+    }
+
     if (name === "حكمة" || name === "اقتباس") {
       return reply("✨ النجاح يبدأ بخطوة.");
     }
+
     if (name === "رقم") {
       const min = i.options.getInteger("من") ?? 1;
       const max = i.options.getInteger("إلى") ?? 100;
-      if (max < min) return reply("❌ الحد الأعلى يجب أن يكون أكبر من الحد الأدنى.");
+
+      if (max < min) {
+        return reply("❌ الحد الأعلى يجب أن يكون أكبر من الحد الأدنى.");
+      }
+
       return reply(`🎯 ${Math.floor(Math.random() * (max - min + 1)) + min}`);
     }
+
     if (name === "اختيار") {
       return reply("🤔 أختار: **" + pick([
         i.options.getString("الخيار_الأول"),
         i.options.getString("الخيار_الثاني")
       ]) + "**");
     }
+
     if (name === "تخمين") {
       const answer = 1 + Math.floor(Math.random() * 10);
-      return reply(i.options.getInteger("الرقم") === answer
-        ? `🎉 صحيح! الرقم ${answer}.`
-        : `😄 الرقم كان ${answer}.`);
-    }
-    if (name === "حجر_ورقة") {
-      return reply("✊✋✌️ " + pick(["حجر", "ورقة", "مقص"]));
-    }
-    if (name === "إيموجي") {
-      return reply(pick(["😂", "🔥", "💎", "👑", "🎮", "⚡", "🛡️"]));
-    }
-    if (name === "لون") {
-      return reply("#" + Math.floor(Math.random() * 16777215)
-        .toString(16).padStart(6, "0").toUpperCase());
-    }
-    if (name === "اسم") {
-      return reply(pick(["Shadow", "Vortex", "Nova", "Blaze", "Ghost", "Titan"]));
-    }
-    if (name === "حروف") {
-      return reply("🔤 " + pick("أبتثجحخدذرزسشصضطظعغفقكلمنهوي".split("")));
-    }
-    if (name === "نعم_أو_لا") {
-      return reply(pick(["نعم ✅", "لا ❌", "ربما 🤔"]));
-    }
-    if (name === "فائز") {
-      const names = i.options.getString("المشاركون")
-        .split(",").map(s => s.trim()).filter(Boolean);
-      return reply("🏆 الفائز: **" + pick(names) + "**");
-    }
-    if (name === "تصويت") {
-      return i.reply({
-        embeds: [makeEmbed("📊 تصويت", i.options.getString("السؤال"))],
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("vote_yes")
-            .setLabel("👍 نعم").setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId("vote_no")
-            .setLabel("👎 لا").setStyle(ButtonStyle.Danger)
-        )]
-      });
-    }
 
-    if (["مساعدة", "مساعدة_الإدارة", "مساعدة_الألعاب"].includes(name)) {
-      const list = name === "مساعدة_الإدارة"
-        ? adminCommands.join("، ")
-        : name === "مساعدة_الألعاب"
-          ? "ر
+      return reply(i.options.getInteger("الرقم") === answer
+        ? `🎉
