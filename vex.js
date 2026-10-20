@@ -14,678 +14,665 @@ const {
   EmbedBuilder
 } = require("discord.js");
 
-const fs = require("node:fs");
-const path = require("node:path");
-
-// ==================== VEX GUARD ====================
+// ===============================
+// VEX GUARD - CONFIGURATION
+// ===============================
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+const TICKET_CHANNEL_ID = process.env.TICKET_CHANNEL_ID;
 
 if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  throw new Error("تأكد من DISCORD_TOKEN وCLIENT_ID وGUILD_ID في GitHub Secrets.");
+  console.error("❌ أضف DISCORD_TOKEN و CLIENT_ID و GUILD_ID في GitHub Secrets.");
+  process.exit(1);
 }
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
-const localFile = path.join(__dirname, "shortcuts.json");
 const warnings = new Map();
-let shortcuts = {};
+const shortcuts = new Map();
+const cooldowns = new Map();
 
-const games = [
-  "Brawl Stars 🎮",
-  "Minecraft ⛏️",
-  "Fortnite 🪂",
-  "Rocket League 🚗",
-  "Roblox 🧱",
-  "eFootball ⚽"
-];
+// ===============================
+// SLASH COMMANDS
+// ===============================
 
-function isAdmin(interaction) {
-  return interaction.memberPermissions?.has(
-    PermissionFlagsBits.Administrator
-  );
-}
+const commands = [
+  new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("عرض جميع أوامر VEX Guard"),
 
-function safeName(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 32);
-}
+  new SlashCommandBuilder()
+    .setName("warn")
+    .setDescription("تحذير عضو")
+    .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
+    .addStringOption(o => o.setName("reason").setDescription("السبب").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-// ==================== SAVE SHORTCUTS ====================
+  new SlashCommandBuilder()
+    .setName("warnings")
+    .setDescription("عرض تحذيرات عضو")
+    .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-async function loadShortcuts() {
-  const token = process.env.GITHUB_TOKEN;
-  const repo = process.env.GITHUB_REPOSITORY;
+  new SlashCommandBuilder()
+    .setName("kick")
+    .setDescription("طرد عضو")
+    .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
+    .addStringOption(o => o.setName("reason").setDescription("السبب"))
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
-  if (token && repo) {
-    try {
-      const response = await fetch(
-        `https://api.github.com/repos/${repo}/contents/shortcuts.json`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"
-          }
-        }
-      );
+  new SlashCommandBuilder()
+    .setName("ban")
+    .setDescription("حظر عضو")
+    .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
+    .addStringOption(o => o.setName("reason").setDescription("السبب"))
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
-      if (response.ok) {
-        const file = await response.json();
-        shortcuts = JSON.parse(
-          Buffer.from(file.content, "base64").toString("utf8")
-        );
-        console.log("✅ تم تحميل الاختصارات المحفوظة في GitHub.");
-        return file.sha;
-      }
+  new SlashCommandBuilder()
+    .setName("unban")
+    .setDescription("فك حظر مستخدم بواسطة ID")
+    .addStringOption(o => o.setName("userid").setDescription("ID المستخدم").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
-      if (response.status !== 404) {
-        console.log("⚠️ تعذّر تحميل الاختصارات من GitHub:", response.status);
-      }
-    } catch (error) {
-      console.error("⚠️ خطأ أثناء تحميل الاختصارات:", error.message);
-    }
-  }
+  new SlashCommandBuilder()
+    .setName("timeout")
+    .setDescription("إسكات عضو مؤقتًا")
+    .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
+    .addIntegerOption(o => o.setName("minutes").setDescription("المدة بالدقائق").setMinValue(1).setMaxValue(40320).setRequired(true))
+    .addStringOption(o => o.setName("reason").setDescription("السبب"))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-  try {
-    if (fs.existsSync(localFile)) {
-      shortcuts = JSON.parse(fs.readFileSync(localFile, "utf8"));
-    }
-  } catch {
-    shortcuts = {};
-  }
+  new SlashCommandBuilder()
+    .setName("untimeout")
+    .setDescription("إزالة الإسكات المؤقت")
+    .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-  return null;
-}
+  new SlashCommandBuilder()
+    .setName("clear")
+    .setDescription("حذف رسائل من الروم")
+    .addIntegerOption(o => o.setName("amount").setDescription("عدد الرسائل من 1 إلى 100").setMinValue(1).setMaxValue(100).setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-async function saveShortcuts() {
-  const data = JSON.stringify(shortcuts, null, 2);
-  const token = process.env.GITHUB_TOKEN;
-  const repo = process.env.GITHUB_REPOSITORY;
+  new SlashCommandBuilder()
+    .setName("lock")
+    .setDescription("قفل الروم")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
-  // حفظ محلي احتياطيًا
-  fs.writeFileSync(localFile, data, "utf8");
+  new SlashCommandBuilder()
+    .setName("unlock")
+    .setDescription("فتح الروم")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
-  if (!token || !repo) {
-    console.log("⚠️ لا يوجد GITHUB_TOKEN؛ الحفظ محلي فقط.");
-    return false;
-  }
+  new SlashCommandBuilder()
+    .setName("slowmode")
+    .setDescription("تحديد وقت الانتظار بين الرسائل")
+    .addIntegerOption(o => o.setName("seconds").setDescription("من 0 إلى 21600 ثانية").setMinValue(0).setMaxValue(21600).setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
-  try {
-    const url =
-      `https://api.github.com/repos/${repo}/contents/shortcuts.json`;
+  new SlashCommandBuilder()
+    .setName("announce")
+    .setDescription("إرسال إعلان في الروم الحالي")
+    .addStringOption(o => o.setName("text").setDescription("نص الإعلان").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json"
-    };
+  new SlashCommandBuilder()
+    .setName("userinfo")
+    .setDescription("عرض معلومات عضو")
+    .addUserOption(o => o.setName("user").setDescription("العضو")),
 
-    let sha;
-    const check = await fetch(url, { headers });
+  new SlashCommandBuilder()
+    .setName("ticket-setup")
+    .setDescription("إنشاء لوحة التكتات")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
-    if (check.ok) {
-      sha = (await check.json()).sha;
-    } else if (check.status !== 404) {
-      throw new Error(`GitHub API status ${check.status}`);
-    }
+  new SlashCommandBuilder()
+    .setName("game")
+    .setDescription("لعبة تخمين رقم"),
 
-    const body = {
-      message: "Save VEX Guard shortcuts",
-      content: Buffer.from(data).toString("base64")
-    };
+  new SlashCommandBuilder()
+    .setName("games")
+    .setDescription("عرض الألعاب المتاحة"),
 
-    if (sha) body.sha = sha;
+  new SlashCommandBuilder()
+    .setName("shortcut-create")
+    .setDescription("إنشاء اختصار نصي")
+    .addStringOption(o => o.setName("name").setDescription("اسم الاختصار").setRequired(true))
+    .addStringOption(o => o.setName("text").setDescription("الرسالة التي يرسلها").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
-    const response = await fetch(url, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(body)
-    });
+  new SlashCommandBuilder()
+    .setName("shortcut-delete")
+    .setDescription("حذف اختصار نصي")
+    .addStringOption(o => o.setName("name").setDescription("اسم الاختصار").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
-    if (!response.ok) {
-      throw new Error(`GitHub save failed: ${response.status}`);
-    }
+  new SlashCommandBuilder()
+    .setName("shortcuts")
+    .setDescription("عرض الاختصارات"),
 
-    console.log("✅ تم حفظ الاختصارات في GitHub.");
-    return true;
-  } catch (error) {
-    console.error("⚠️ لم يتم حفظ الاختصارات في GitHub:", error.message);
-    return false;
-  }
-}
+  new SlashCommandBuilder()
+    .setName("shortcut-use")
+    .setDescription("استخدام اختصار نصي")
+    .addStringOption(o => o.setName("name").setDescription("اسم الاختصار").setRequired(true))
+].map(command => command.toJSON());
 
-// ==================== SLASH COMMANDS ====================
-
-function buildCommands() {
-  const commands = [
-    new SlashCommandBuilder()
-      .setName("help")
-      .setDescription("عرض أوامر VEX Guard"),
-
-    new SlashCommandBuilder()
-      .setName("warn")
-      .setDescription("تحذير عضو")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
-      .addStringOption(o => o.setName("reason").setDescription("سبب التحذير").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("warnings")
-      .setDescription("عرض تحذيرات عضو")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("kick")
-      .setDescription("طرد عضو")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
-      .addStringOption(o => o.setName("reason").setDescription("السبب").setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName("ban")
-      .setDescription("حظر عضو")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
-      .addStringOption(o => o.setName("reason").setDescription("السبب").setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName("unban")
-      .setDescription("إلغاء حظر مستخدم بواسطة ID")
-      .addStringOption(o => o.setName("userid").setDescription("معرّف المستخدم").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("timeout")
-      .setDescription("إعطاء عضو مهلة بالدقائق")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true))
-      .addIntegerOption(o => o.setName("minutes").setDescription("المدة بالدقائق").setMinValue(1).setMaxValue(40320).setRequired(true))
-      .addStringOption(o => o.setName("reason").setDescription("السبب").setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName("untimeout")
-      .setDescription("إزالة المهلة عن عضو")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("clear")
-      .setDescription("حذف رسائل من الروم")
-      .addIntegerOption(o => o.setName("amount").setDescription("عدد الرسائل (1 إلى 100)").setMinValue(1).setMaxValue(100).setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("lock")
-      .setDescription("قفل الروم الحالي"),
-
-    new SlashCommandBuilder()
-      .setName("unlock")
-      .setDescription("فتح الروم الحالي"),
-
-    new SlashCommandBuilder()
-      .setName("slowmode")
-      .setDescription("تغيير وضع بطء المحادثة")
-      .addIntegerOption(o => o.setName("seconds").setDescription("الثواني (0 إلى 21600)").setMinValue(0).setMaxValue(21600).setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("announce")
-      .setDescription("إرسال إعلان في الروم الحالي")
-      .addStringOption(o => o.setName("message").setDescription("نص الإعلان").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("userinfo")
-      .setDescription("عرض معلومات عضو")
-      .addUserOption(o => o.setName("user").setDescription("العضو").setRequired(false)),
-
-    new SlashCommandBuilder()
-      .setName("ticket-setup")
-      .setDescription("إنشاء لوحة فتح التذاكر في الروم الحالي"),
-
-    new SlashCommandBuilder()
-      .setName("game")
-      .setDescription("اقتراح لعبة عشوائية"),
-
-    new SlashCommandBuilder()
-      .setName("games")
-      .setDescription("عرض قائمة الألعاب"),
-
-    new SlashCommandBuilder()
-      .setName("shortcut-create")
-      .setDescription("إنشاء اختصار سلاش جديد")
-      .addStringOption(o => o.setName("name").setDescription("اسم الأمر بالإنجليزية").setRequired(true))
-      .addStringOption(o => o.setName("message").setDescription("الرسالة التي يرسلها الأمر").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("shortcut-delete")
-      .setDescription("حذف اختصار سلاش")
-      .addStringOption(o => o.setName("name").setDescription("اسم الاختصار").setRequired(true)),
-
-    new SlashCommandBuilder()
-      .setName("shortcuts")
-      .setDescription("عرض الاختصارات المخصصة")
-  ];
-
-  for (const [name, message] of Object.entries(shortcuts)) {
-    if (!commands.some(c => c.name === name)) {
-      commands.push(
-        new SlashCommandBuilder()
-          .setName(name)
-          .setDescription(`اختصار VEX: ${message}`.slice(0, 100))
-      );
-    }
-  }
-
-  return commands.map(c => c.toJSON());
-}
+// ===============================
+// REGISTER COMMANDS
+// ===============================
 
 async function registerCommands() {
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+
   await rest.put(
     Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-    { body: buildCommands() }
+    { body: commands }
   );
-  console.log("✅ تم تسجيل أوامر VEX Guard والاختصارات في XR.");
+
+  console.log("✅ تم تسجيل أوامر XR.");
 }
 
-// ==================== BOT READY & CONNECTION LOGS ====================
+// ===============================
+// READY / CONNECTION
+// ===============================
 
-client.once(Events.ClientReady, async readyClient => {
-  console.log(`✅ VEX Guard يعمل باسم ${readyClient.user.tag}`);
-  console.log(`🟢 حالة الاتصال: ${readyClient.ws.status}`);
-  console.log(`🆔 Bot ID: ${readyClient.user.id}`);
-  console.log(`🏠 Guild ID: ${GUILD_ID}`);
+client.once(Events.ClientReady, async bot => {
+  console.log(`✅ ${bot.user.tag} متصل بـ Discord`);
+  console.log("🛡️ VEX Guard جاهز للعمل.");
 
   try {
-    await loadShortcuts();
     await registerCommands();
   } catch (error) {
-    console.error("❌ خطأ أثناء إعداد الأوامر:", error);
+    console.error("❌ فشل تسجيل الأوامر:", error.message);
   }
 });
 
-client.on("shardDisconnect", event => {
-  console.log("🔴 انقطع الاتصال مع Discord. Code:", event.code);
+client.on(Events.ShardDisconnect, () => {
+  console.log("⚠️ انقطع اتصال Discord، تتم محاولة إعادة الاتصال.");
 });
 
-client.on("shardReconnecting", () => {
-  console.log("🟡 إعادة الاتصال بـ Discord...");
+client.on(Events.ShardReconnecting, () => {
+  console.log("🔄 إعادة الاتصال بـ Discord...");
 });
 
-client.on("shardResume", () => {
-  console.log("🟢 عاد الاتصال بـ Discord.");
+client.on(Events.Error, error => {
+  console.error("❌ خطأ Discord:", error.message);
 });
 
-client.on("error", error => {
-  console.error("❌ Discord client error:", error);
-});
+// ===============================
+// LOGGING
+// ===============================
 
-process.on("unhandledRejection", error => {
-  console.error("❌ Unhandled rejection:", error);
-});
-
-// ==================== INTERACTIONS ====================
-
-client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
+async function sendLog(guild, text) {
+  if (!LOG_CHANNEL_ID) return;
 
   try {
-    // الرد مبكرًا لتجنب Unknown interaction
-    await interaction.deferReply({ ephemeral: true });
+    const channel = await guild.channels.fetch(LOG_CHANNEL_ID);
+    if (channel && channel.isTextBased()) {
+      await channel.send({ content: text });
+    }
+  } catch (error) {
+    console.error("تعذر إرسال سجل الإدارة:", error.message);
+  }
+}
 
-    // ---------- TICKET BUTTON ----------
+// ===============================
+// TICKET BUTTONS
+// ===============================
+
+async function createTicket(interaction) {
+  const guild = interaction.guild;
+
+  const existing = guild.channels.cache.find(
+    c => c.type === ChannelType.GuildText &&
+         c.topic === `VEX_TICKET_${interaction.user.id}`
+  );
+
+  if (existing) {
+    return interaction.editReply(`لديك تكت مفتوح بالفعل: ${existing}`);
+  }
+
+  const channel = await guild.channels.create({
+    name: `ticket-${interaction.user.username}`
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 80),
+    type: ChannelType.GuildText,
+    topic: `VEX_TICKET_${interaction.user.id}`,
+    permissionOverwrites: [
+      {
+        id: guild.roles.everyone.id,
+        deny: [PermissionFlagsBits.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory
+        ]
+      },
+      {
+        id: client.user.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ManageChannels
+        ]
+      }
+    ]
+  });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("vex_ticket_close")
+      .setLabel("إغلاق التكت")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({
+    content: `مرحبًا ${interaction.user} 👋\nاشرح طلبك هنا، وسيتمكن طاقم الإدارة من مساعدتك.`,
+    components: [row]
+  });
+
+  await interaction.editReply(`✅ تم إنشاء تكتك: ${channel}`);
+}
+
+client.on(Events.InteractionCreate, async interaction => {
+  try {
     if (interaction.isButton()) {
-      if (interaction.customId !== "vex_open_ticket") return;
-
-      const guild = interaction.guild;
-      if (!guild) return interaction.editReply("❌ هذا الزر يعمل داخل السيرفر فقط.");
-
-      const existing = guild.channels.cache.find(
-        c => c.type === ChannelType.GuildText &&
-          c.topic === `vex-ticket:${interaction.user.id}`
-      );
-
-      if (existing) {
-        return interaction.editReply(`🎫 لديك تذكرة مفتوحة: ${existing}`);
+      if (interaction.customId === "vex_ticket_open") {
+        await interaction.deferReply({ ephemeral: true });
+        return await createTicket(interaction);
       }
 
-      const channel = await guild.channels.create({
-        name: `ticket-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 90),
-        type: ChannelType.GuildText,
-        topic: `vex-ticket:${interaction.user.id}`,
-        permissionOverwrites: [
-          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: interaction.user.id, allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory
-          ] },
-          { id: client.user.id, allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ManageChannels
-          ] }
-        ]
-      });
+      if (interaction.customId === "vex_ticket_close") {
+        if (!interaction.channel?.topic?.startsWith("VEX_TICKET_")) {
+          return interaction.reply({
+            content: "هذا ليس تكتًا تابعًا للبوت.",
+            ephemeral: true
+          });
+        }
 
-      await channel.send(
-        `🎫 أهلًا ${interaction.user}، اشرح طلبك هنا. فريق الإدارة سيساعدك قريبًا.`
-      );
+        const ownerId = interaction.channel.topic.slice("VEX_TICKET_".length);
+        const isOwner = interaction.user.id === ownerId;
+        const isMod = interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
 
-      return interaction.editReply(`✅ تم فتح تذكرتك: ${channel}`);
+        if (!isOwner && !isMod) {
+          return interaction.reply({
+            content: "ليس لديك صلاحية إغلاق هذا التكت.",
+            ephemeral: true
+          });
+        }
+
+        await interaction.reply("🔒 سيتم إغلاق التكت بعد 3 ثوانٍ.");
+        setTimeout(() => {
+          interaction.channel.delete().catch(console.error);
+        }, 3000);
+      }
+
+      return;
     }
+
+    if (!interaction.isChatInputCommand()) return;
 
     const { commandName, options, guild, member } = interaction;
 
-    // ---------- CUSTOM SHORTCUT ----------
-    if (Object.hasOwn(shortcuts, commandName)) {
-      return interaction.editReply(shortcuts[commandName]);
-    }
+    // Keep Discord interactions from timing out.
+    await interaction.deferReply({
+      ephemeral: [
+        "warn", "warnings", "kick", "ban", "unban",
+        "timeout", "untimeout", "clear", "lock", "unlock",
+        "slowmode", "ticket-setup", "shortcut-create",
+        "shortcut-delete", "shortcut-use"
+      ].includes(commandName)
+    });
 
-    // ---------- HELP ----------
+    const reply = content => interaction.editReply(content);
+    const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator);
+
+    // =========================
+    // HELP
+    // =========================
+
     if (commandName === "help") {
-      return interaction.editReply({
-        content:
-          "**🛡️ أوامر VEX Guard**\n" +
-          "`/warn` `/warnings` `/kick` `/ban` `/unban`\n" +
-          "`/timeout` `/untimeout` `/clear` `/lock` `/unlock`\n" +
-          "`/slowmode` `/announce` `/userinfo` `/ticket-setup`\n" +
-          "`/game` `/games` `/shortcut-create` `/shortcut-delete` `/shortcuts`"
-      });
-    }
-
-    // ---------- GAMES ----------
-    if (commandName === "game") {
-      const game = games[Math.floor(Math.random() * games.length)];
-      return interaction.editReply(`🎮 اقتراحي لك: **${game}**`);
-    }
-
-    if (commandName === "games") {
-      return interaction.editReply(`🎮 **قائمة الألعاب:**\n${games.map(g => `• ${g}`).join("\n")}`);
-    }
-
-    // ---------- USER INFO ----------
-    if (commandName === "userinfo") {
-      const user = options.getUser("user") || interaction.user;
-      const targetMember = await guild.members.fetch(user.id).catch(() => null);
-
       const embed = new EmbedBuilder()
         .setColor(0x5865F2)
-        .setTitle("👤 معلومات العضو")
-        .setThumbnail(user.displayAvatarURL())
-        .addFields(
-          { name: "الاسم", value: user.tag, inline: true },
-          { name: "User ID", value: user.id, inline: true },
-          { name: "تاريخ إنشاء الحساب", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>` }
-        );
+        .setTitle("🛡️ 『VEX』 Guard")
+        .setDescription([
+          "`/warn` — تحذير عضو",
+          "`/warnings` — عرض التحذيرات",
+          "`/kick` — طرد عضو",
+          "`/ban` — حظر عضو",
+          "`/unban` — فك الحظر",
+          "`/timeout` — إسكات مؤقت",
+          "`/untimeout` — إزالة الإسكات",
+          "`/clear` — حذف رسائل",
+          "`/lock` و `/unlock` — قفل وفتح الروم",
+          "`/slowmode` — وقت الانتظار",
+          "`/announce` — إعلان",
+          "`/userinfo` — معلومات عضو",
+          "`/ticket-setup` — إعداد التكتات",
+          "`/game` و `/games` — ألعاب",
+          "`/shortcut-create` و `/shortcut-use` — اختصارات",
+          "`/shortcut-delete` و `/shortcuts` — إدارة الاختصارات"
+        ].join("\n"));
 
-      if (targetMember) {
-        embed.addFields({
-          name: "انضم للسيرفر",
-          value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:D>`
-        });
-      }
-
-      return interaction.editReply({ embeds: [embed] });
+      return reply({ embeds: [embed] });
     }
 
-    // ---------- CUSTOM SHORTCUT MANAGEMENT ----------
-    if (["shortcut-create", "shortcut-delete", "shortcuts"].includes(commandName)) {
-      if (!isAdmin(interaction)) {
-        return interaction.editReply("❌ هذا الأمر للإدارة فقط.");
-      }
-
-      if (commandName === "shortcuts") {
-        const names = Object.keys(shortcuts);
-        return interaction.editReply(
-          names.length
-            ? `**اختصاراتك:** ${names.map(n => `\`/${n}\``).join("، ")}`
-            : "لا توجد اختصارات مخصصة بعد."
-        );
-      }
-
-      if (commandName === "shortcut-create") {
-        const name = safeName(options.getString("name"));
-        const message = options.getString("message", true).trim();
-
-        if (!name || name.length < 2) {
-          return interaction.editReply("❌ الاسم غير صالح. استخدم حروفًا إنجليزية وأرقامًا أو شرطات.");
-        }
-
-        if (buildCommands().some(c => c.name === name)) {
-          return interaction.editReply("❌ هذا الاسم مستخدم بالفعل كأمر موجود.");
-        }
-
-        if (!message || message.length > 1800) {
-          return interaction.editReply("❌ الرسالة يجب أن تكون بين حرف واحد و1800 حرف.");
-        }
-
-        shortcuts[name] = message;
-        await saveShortcuts();
-        await registerCommands();
-
-        return interaction.editReply(
-          `✅ تم إنشاء الاختصار \`/${name}\`.\nقد تحتاج إلى لحظات حتى يظهر في قائمة أوامر Discord.`
-        );
-      }
-
-      if (commandName === "shortcut-delete") {
-        const name = safeName(options.getString("name"));
-
-        if (!Object.hasOwn(shortcuts, name)) {
-          return interaction.editReply("❌ لم أجد هذا الاختصار.");
-        }
-
-        delete shortcuts[name];
-        await saveShortcuts();
-        await registerCommands();
-
-        return interaction.editReply(`✅ تم حذف الاختصار \`/${name}\`.`);
-      }
-    }
-
-    // ---------- TICKET SETUP ----------
-    if (commandName === "ticket-setup") {
-      if (!isAdmin(interaction)) {
-        return interaction.editReply("❌ هذا الأمر للإدارة فقط.");
-      }
-
-      const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle("🎫 الدعم الفني | VEX Guard")
-        .setDescription("اضغط على الزر أدناه لفتح تذكرة خاصة مع فريق الإدارة.");
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("vex_open_ticket")
-          .setLabel("فتح تذكرة")
-          .setEmoji("🎫")
-          .setStyle(ButtonStyle.Primary)
-      );
-
-      await interaction.channel.send({ embeds: [embed], components: [row] });
-      return interaction.editReply("✅ تم نشر لوحة التذاكر في هذا الروم.");
-    }
-
-    // ---------- MODERATION ----------
-    const moderationCommands = [
-      "warn", "warnings", "kick", "ban", "unban",
-      "timeout", "untimeout", "clear", "lock",
-      "unlock", "slowmode", "announce"
-    ];
-
-    if (moderationCommands.includes(commandName) && !isAdmin(interaction)) {
-      return interaction.editReply("❌ هذا الأمر للإدارة فقط.");
-    }
+    // =========================
+    // WARNINGS
+    // =========================
 
     if (commandName === "warn") {
-      const user = options.getUser("user", true);
-      const reason = options.getString("reason", true);
+      const user = options.getUser("user");
+      const reason = options.getString("reason");
       const list = warnings.get(user.id) || [];
 
-      list.push({ reason, moderator: interaction.user.tag, date: new Date().toISOString() });
-      warnings.set(user.id, list);
+      list.push({
+        reason,
+        moderator: interaction.user.id,
+        date: new Date().toISOString()
+      });
 
-      return interaction.editReply(`⚠️ تم تحذير **${user.tag}**.\nالسبب: ${reason}`);
+      warnings.set(user.id, list);
+      await sendLog(guild, `⚠️ ${user.tag} تحذير من ${interaction.user.tag}: ${reason}`);
+
+      return reply(`⚠️ تم تحذير ${user}.\nالسبب: ${reason}\nعدد تحذيراته في الذاكرة الحالية: ${list.length}`);
     }
 
     if (commandName === "warnings") {
-      const user = options.getUser("user", true);
+      const user = options.getUser("user");
       const list = warnings.get(user.id) || [];
 
-      return interaction.editReply(
+      return reply(
         list.length
-          ? `⚠️ تحذيرات **${user.tag}**:\n${list.map((w, i) => `${i + 1}. ${w.reason} — ${w.moderator}`).join("\n")}`
+          ? `⚠️ تحذيرات ${user.tag}:\n${list.map((w, i) => `${i + 1}. ${w.reason}`).join("\n")}`
           : `✅ لا توجد تحذيرات مسجلة لـ ${user.tag}.`
       );
     }
 
-    if (commandName === "kick" || commandName === "ban") {
-      const user = options.getUser("user", true);
-      const reason = options.getString("reason") || "لم يتم تحديد سبب";
+    // =========================
+    // KICK / BAN / TIMEOUT
+    // =========================
 
+    if (["kick", "ban", "timeout", "untimeout"].includes(commandName)) {
+      const user = options.getUser("user");
       const target = await guild.members.fetch(user.id).catch(() => null);
+
       if (!target) {
-        return interaction.editReply("❌ العضو غير موجود في السيرفر.");
+        return reply("❌ لم أجد العضو داخل السيرفر.");
       }
 
-      if (target.id === interaction.user.id || target.id === client.user.id) {
-        return interaction.editReply("❌ لا يمكنك تنفيذ هذا الإجراء على نفسك أو على البوت.");
+      if (user.id === interaction.user.id) {
+        return reply("❌ لا يمكنك تنفيذ هذا الأمر على نفسك.");
+      }
+
+      if (user.id === client.user.id) {
+        return reply("❌ لا يمكن تنفيذ هذا الأمر على البوت.");
       }
 
       if (!target.manageable) {
-        return interaction.editReply("❌ لا أستطيع إدارة هذا العضو. تحقق من صلاحياتي وترتيب الرتب.");
+        return reply("❌ رتبة البوت يجب أن تكون أعلى من رتبة العضو.");
       }
+
+      if (!isAdmin &&
+          target.roles.highest.position >= member.roles.highest.position) {
+        return reply("❌ لا يمكنك تنفيذ هذا الأمر على عضو رتبته مساوية أو أعلى من رتبتك.");
+      }
+
+      const reason = options.getString("reason") || `بواسطة ${interaction.user.tag}`;
 
       if (commandName === "kick") {
+        if (!target.kickable) return reply("❌ لا أملك صلاحية طرد هذا العضو.");
         await target.kick(reason);
-        return interaction.editReply(`👢 تم طرد ${user.tag}.\nالسبب: ${reason}`);
+        await sendLog(guild, `👢 تم طرد ${user.tag}. السبب: ${reason}`);
+        return reply(`✅ تم طرد ${user.tag}.`);
       }
 
-      await target.ban({ reason });
-      return interaction.editReply(`🔨 تم حظر ${user.tag}.\nالسبب: ${reason}`);
+      if (commandName === "ban") {
+        if (!target.bannable) return reply("❌ لا أملك صلاحية حظر هذا العضو.");
+        await target.ban({ reason });
+        await sendLog(guild, `🔨 تم حظر ${user.tag}. السبب: ${reason}`);
+        return reply(`✅ تم حظر ${user.tag}.`);
+      }
+
+      if (commandName === "timeout") {
+        const minutes = options.getInteger("minutes");
+        await target.timeout(minutes * 60 * 1000, reason);
+        await sendLog(guild, `🔇 تم إسكات ${user.tag} لمدة ${minutes} دقيقة.`);
+        return reply(`✅ تم إسكات ${user.tag} لمدة ${minutes} دقيقة.`);
+      }
+
+      if (commandName === "untimeout") {
+        await target.timeout(null, `إزالة الإسكات بواسطة ${interaction.user.tag}`);
+        return reply(`✅ تمت إزالة الإسكات عن ${user.tag}.`);
+      }
     }
 
     if (commandName === "unban") {
-      const userId = options.getString("userid", true).trim();
+      const userId = options.getString("userid");
 
-      if (!/^\d{17,20}$/.test(userId)) {
-        return interaction.editReply("❌ أرسل User ID صحيحًا.");
+      try {
+        await guild.members.unban(userId, `بواسطة ${interaction.user.tag}`);
+        await sendLog(guild, `🔓 تم فك الحظر عن ID: ${userId}`);
+        return reply(`✅ تم فك الحظر عن ${userId}.`);
+      } catch {
+        return reply("❌ تعذر فك الحظر. تحقق من ID والصلاحيات.");
       }
-
-      await guild.members.unban(userId);
-      return interaction.editReply(`✅ تم إلغاء الحظر عن المستخدم \`${userId}\`.`);
     }
 
-    if (commandName === "timeout") {
-      const user = options.getUser("user", true);
-      const minutes = options.getInteger("minutes", true);
-      const reason = options.getString("reason") || "لم يتم تحديد سبب";
-      const target = await guild.members.fetch(user.id).catch(() => null);
-
-      if (!target) return interaction.editReply("❌ العضو غير موجود.");
-      if (!target.moderatable) return interaction.editReply("❌ لا أستطيع إعطاء هذا العضو مهلة. تحقق من ترتيب الرتب.");
-
-      await target.timeout(minutes * 60 * 1000, reason);
-      return interaction.editReply(`⏳ تم إعطاء ${user.tag} مهلة لمدة ${minutes} دقيقة.`);
-    }
-
-    if (commandName === "untimeout") {
-      const user = options.getUser("user", true);
-      const target = await guild.members.fetch(user.id).catch(() => null);
-
-      if (!target) return interaction.editReply("❌ العضو غير موجود.");
-      if (!target.moderatable) return interaction.editReply("❌ لا أستطيع إزالة المهلة عن هذا العضو.");
-
-      await target.timeout(null);
-      return interaction.editReply(`✅ تمت إزالة المهلة عن ${user.tag}.`);
-    }
+    // =========================
+    // CHANNEL MODERATION
+    // =========================
 
     if (commandName === "clear") {
-      const amount = options.getInteger("amount", true);
+      const amount = options.getInteger("amount");
 
-      if (!interaction.channel?.isTextBased() || !interaction.channel.bulkDelete) {
-        return interaction.editReply("❌ هذا الأمر لا يعمل في هذا الروم.");
+      if (!interaction.channel?.bulkDelete) {
+        return reply("❌ لا يمكن حذف الرسائل في هذا الروم.");
       }
 
       const deleted = await interaction.channel.bulkDelete(amount, true);
-      return interaction.editReply(`🧹 تم حذف ${deleted.size} رسالة.`);
+      return reply(`🧹 تم حذف ${deleted.size} رسالة.`);
     }
 
     if (commandName === "lock" || commandName === "unlock") {
       const channel = interaction.channel;
 
-      if (!channel || !("permissionOverwrites" in channel)) {
-        return interaction.editReply("❌ لا يمكن تعديل صلاحيات هذا الروم.");
-      }
-
-      const everyone = guild.roles.everyone;
-      const locked = commandName === "lock";
-
-      await channel.permissionOverwrites.edit(everyone, {
-        SendMessages: locked ? false : null
+      await channel.permissionOverwrites.edit(guild.roles.everyone, {
+        SendMessages: commandName === "unlock"
+          ? null
+          : false
       });
 
-      return interaction.editReply(
-        locked ? "🔒 تم قفل الروم." : "🔓 تم فتح الروم."
+      return reply(
+        commandName === "lock"
+          ? "🔒 تم قفل الروم."
+          : "🔓 تم فتح الروم."
       );
     }
 
     if (commandName === "slowmode") {
-      const seconds = options.getInteger("seconds", true);
-      const channel = interaction.channel;
-
-      if (!channel || !("setRateLimitPerUser" in channel)) {
-        return interaction.editReply("❌ لا يمكن تعديل بطء المحادثة في هذا الروم.");
-      }
-
-      await channel.setRateLimitPerUser(seconds);
-      return interaction.editReply(`🐢 تم ضبط بطء المحادثة على ${seconds} ثانية.`);
+      const seconds = options.getInteger("seconds");
+      await interaction.channel.setRateLimitPerUser(seconds);
+      return reply(`✅ تم ضبط Slowmode على ${seconds} ثانية.`);
     }
 
     if (commandName === "announce") {
-      const message = options.getString("message", true);
+      const text = options.getString("text");
 
       await interaction.channel.send({
         embeds: [
           new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle("📢 إعلان | XR")
-            .setDescription(message)
-            .setFooter({ text: "VEX Guard" })
+            .setTitle("📢 إعلان XR")
+            .setDescription(text)
+            .setFooter({ text: "『VEX』 Guard" })
             .setTimestamp()
         ]
       });
 
-      return interaction.editReply("✅ تم إرسال الإعلان.");
+      return reply("✅ تم إرسال الإعلان.");
     }
 
-    return interaction.editReply("ℹ️ لم أتعرف على هذا الأمر.");
+    // =========================
+    // USER INFO
+    // =========================
+
+    if (commandName === "userinfo") {
+      const user = options.getUser("user") || interaction.user;
+      const target = await guild.members.fetch(user.id).catch(() => null);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`معلومات ${user.tag}`)
+        .setThumbnail(user.displayAvatarURL())
+        .addFields(
+          { name: "اسم المستخدم", value: user.tag, inline: true },
+          { name: "ID", value: user.id, inline: true },
+          { name: "تاريخ إنشاء الحساب", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>`, inline: false }
+        );
+
+      if (target) {
+        embed.addFields({
+          name: "تاريخ الانضمام للسيرفر",
+          value: `<t:${Math.floor(target.joinedTimestamp / 1000)}:D>`,
+          inline: false
+        });
+      }
+
+      return reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // TICKETS
+    // =========================
+
+    if (commandName === "ticket-setup") {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("vex_ticket_open")
+          .setLabel("فتح تكت")
+          .setEmoji("🎫")
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      await interaction.channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle("🎫 نظام التكتات")
+            .setDescription("اضغط على الزر لفتح تكت خاص والتواصل مع الإدارة.")
+        ],
+        components: [row]
+      });
+
+      return reply("✅ تم إنشاء لوحة التكتات.");
+    }
+
+    // =========================
+    // GAMES
+    // =========================
+
+    if (commandName === "games") {
+      return reply("🎮 الألعاب المتاحة:\n`/game` — تخمين رقم من 1 إلى 5.");
+    }
+
+    if (commandName === "game") {
+      const answer = Math.floor(Math.random() * 5) + 1;
+
+      return reply(
+        `🎲 ${interaction.user} خمن رقمًا من 1 إلى 5!\nالرقم هو **${answer}** 😄`
+      );
+    }
+
+    // =========================
+    // TEXT SHORTCUTS
+    // =========================
+
+    if (commandName === "shortcut-create") {
+      const name = options.getString("name").toLowerCase().trim();
+      const text = options.getString("text").trim();
+
+      if (!/^[a-z0-9_-]{1,30}$/.test(name)) {
+        return reply("❌ استخدم حروفًا إنجليزية صغيرة أو أرقامًا أو - أو _، بحد أقصى 30 حرفًا.");
+      }
+
+      if (text.length > 1800) {
+        return reply("❌ الرسالة طويلة جدًا. الحد الأقصى 1800 حرف.");
+      }
+
+      shortcuts.set(name, text);
+      return reply(`✅ تم إنشاء الاختصار **${name}**.\nاستخدمه عبر \`/shortcut-use name:${name}\`.`);
+    }
+
+    if (commandName === "shortcut-delete") {
+      const name = options.getString("name").toLowerCase().trim();
+
+      if (!shortcuts.has(name)) {
+        return reply("❌ هذا الاختصار غير موجود.");
+      }
+
+      shortcuts.delete(name);
+      return reply(`✅ تم حذف الاختصار **${name}**.`);
+    }
+
+    if (commandName === "shortcuts") {
+      return reply(
+        shortcuts.size
+          ? `📋 الاختصارات:\n${[...shortcuts.keys()].map(name => `• ${name}`).join("\n")}`
+          : "لا توجد اختصارات حاليًا."
+      );
+    }
+
+    if (commandName === "shortcut-use") {
+      const name = options.getString("name").toLowerCase().trim();
+      const text = shortcuts.get(name);
+
+      return reply(text || "❌ لم أجد هذا الاختصار.");
+    }
+
   } catch (error) {
-    console.error("❌ خطأ أثناء تنفيذ التفاعل:", error);
+    console.error("❌ خطأ أثناء تنفيذ الأمر:", error);
 
-    const message =
-      error.code === 50013
-        ? "❌ ينقص البوت صلاحية Discord المطلوبة."
-        : "❌ حدث خطأ. راجع سجل Actions لمعرفة التفاصيل.";
+    const message = "❌ حدث خطأ أثناء تنفيذ الأمر. تحقق من صلاحيات البوت وسجل التشغيل.";
 
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(message).catch(() => {});
-    } else {
-      await interaction.reply({ content: message, ephemeral: true }).catch(() => {});
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(message);
+      } else {
+        await interaction.reply({ content: message, ephemeral: true });
+      }
+    } catch (replyError) {
+      console.error("تعذر الرد على التفاعل:", replyError.message);
     }
   }
 });
 
-// ==================== START ====================
+// ===============================
+// GLOBAL ERRORS
+// ===============================
+
+process.on("unhandledRejection", error => {
+  console.error("❌ Promise error:", error);
+});
+
+process.on("uncaughtException", error => {
+  console.error("❌ Unexpected error:", error);
+});
+
+// ===============================
+// START BOT
+// ===============================
 
 client.login(TOKEN).catch(error => {
-  console.error("❌ فشل تسجيل الدخول إلى Discord:", error);
+  console.error("❌ فشل تسجيل الدخول إلى Discord:", error.message);
+  process.exit(1);
 });
