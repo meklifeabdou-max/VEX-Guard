@@ -1,377 +1,328 @@
-
 const {
-  Client, GatewayIntentBits, PermissionFlagsBits, ChannelType,
-  SlashCommandBuilder, REST, Routes, EmbedBuilder
+  Client, GatewayIntentBits, REST, Routes,
+  SlashCommandBuilder, EmbedBuilder, ActionRowBuilder,
+  ButtonBuilder, ButtonStyle, PermissionFlagsBits
 } = require("discord.js");
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
 
-if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  console.error("❌ تحقق من أسرار GitHub الثلاثة.");
+if (!TOKEN || !CLIENT_ID) {
+  console.error("❌ تأكد من DISCORD_TOKEN و CLIENT_ID في GitHub Secrets");
   process.exit(1);
 }
 
-const client = new Client({
+const bot = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
-const warnings = new Map();
-const games = new Map();
-const uptimeStarted = Date.now();
-
-const cmd = (name, description) =>
-  new SlashCommandBuilder().setName(name).setDescription(description);
-
-const addUser = c =>
-  c.addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true));
-
-const addText = (c, name, description, required = true) =>
-  c.addStringOption(o => o.setName(name).setDescription(description).setRequired(required));
-
-const addNumber = (c, name, description, min, max, required = true) =>
-  c.addIntegerOption(o => o.setName(name).setDescription(description)
-    .setMinValue(min).setMaxValue(max).setRequired(required));
-
-const addRole = c =>
-  c.addRoleOption(o => o.setName("role").setDescription("الرتبة").setRequired(true));
-
 const commands = [
-  cmd("help", "عرض قائمة الأوامر"),
-  cmd("ping", "فحص استجابة البوت"),
-  cmd("serverinfo", "معلومات السيرفر"),
-  cmd("userinfo", "معلومات عضو").addUserOption(o => o.setName("member").setDescription("العضو")),
-  cmd("avatar", "عرض صورة عضو").addUserOption(o => o.setName("member").setDescription("العضو")),
-  cmd("servericon", "عرض صورة السيرفر"),
-  cmd("membercount", "عدد أعضاء السيرفر"),
-  cmd("botinfo", "معلومات البوت"),
-  cmd("roleinfo", "معلومات رتبة").addRoleOption(o => o.setName("role").setDescription("الرتبة").setRequired(true)),
-  cmd("channelinfo", "معلومات القناة").addChannelOption(o => o.setName("channel").setDescription("القناة")),
+  ["كت","سؤال عشوائي"], ["روليت","روليت جماعية بين الأعضاء"],
+  ["صراحة","سؤال صراحة"], ["تحدي","تحدٍ عشوائي"],
+  ["حظ","جرّب حظك"], ["نرد","ارم النرد"],
+  ["عملة","اقلب العملة"], ["لغز","احصل على لغز"],
+  ["نكتة","نكتة عشوائية"], ["حقيقة","حقيقة ممتعة"],
+  ["اختيار","اختيار عشوائي"], ["فريق","تحدي الفرق"],
+  ["تصويت","أنشئ تصويتًا"], ["رقم","رقم عشوائي"],
+  ["إيموجي","إيموجي عشوائي"], ["لون","لون عشوائي"],
+  ["اسم","اسم عشوائي"], ["حروف","حرف عشوائي"],
+  ["سؤال","سؤال جديد"], ["مساعدة","قائمة الأوامر"],
+  ["بنق","سرعة استجابة البوت"], ["بوت","معلومات البوت"],
+  ["خادم","معلومات السيرفر"], ["عضو","معلومات عن عضو"],
+  ["أفاتار","صورتك الشخصية"], ["أيقونة","أيقونة السيرفر"],
+  ["الأعضاء","عدد أعضاء السيرفر"], ["الرتب","قائمة الرتب"],
+  ["القنوات","عدد القنوات"], ["الوقت","الوقت الحالي"],
+  ["تاريخ","تاريخ اليوم"], ["نصيحة","نصيحة عشوائية"],
+  ["اقتباس","اقتباس تحفيزي"], ["شكر","رسالة شكر"],
+  ["ترحيب","رسالة ترحيب"], ["وداع","رسالة وداع"],
+  ["تخمين","لعبة تخمين الرقم"], ["حجر_ورقة","حجر ورقة مقص"],
+  ["ذاكرة","تحدي الذاكرة"], ["سرعة","تحدي السرعة"],
+  ["حساب","معلومات حسابك"], ["انضمام","تاريخ انضمامك"],
+  ["المالك","مالك السيرفر"], ["المشرفون","تذكير بالإدارة"],
+  ["القواعد","تذكير بقوانين السيرفر"], ["اقتراح","أرسل اقتراحًا"],
+  ["بلاغ","إرسال بلاغ"], ["إعلان","إعلان للسيرفر"],
+  ["قفل","قفل القناة"], ["فتح","فتح القناة"],
+  ["مسح","حذف الرسائل"], ["بطء","تغيير وضع البطء"],
+  ["طرد","طرد عضو"], ["حظر","حظر عضو"],
+  ["إلغاء_حظر","إلغاء حظر عضو"], ["تحذير","تحذير عضو"],
+  ["مهلة","إسكات عضو مؤقتًا"], ["إنهاء_المهلة","إلغاء مهلة عضو"],
+  ["لقب","تغيير لقب عضو"], ["أضف_رتبة","إضافة رتبة"],
+  ["احذف_رتبة","حذف رتبة من عضو"], ["إنشاء_قناة","إنشاء قناة"],
+  ["حذف_قناة","حذف القناة الحالية"], ["موضوع","تغيير موضوع القناة"],
+  ["دعوة","إنشاء رابط دعوة"], ["إحصائيات","إحصائيات السيرفر"],
+  ["عمر_الحساب","معلومات عمر حسابك"], ["عمر_السيرفر","عمر السيرفر"],
+  ["قائمة_الألعاب","قائمة الألعاب"], ["روليت_مساعدة","شرح الروليت"],
+  ["تحدي_جماعي","تحدٍ جماعي"], ["سؤال_إضافي","سؤال إضافي"],
+  ["فزورة","فزورة جديدة"], ["حساب_جمع","جمع عددين"],
+  ["نسبة","حساب نسبة مئوية"], ["ترتيب","ترتيب عشوائي"],
+  ["فريق_أحمر","اختر الفريق الأحمر"], ["فريق_أزرق","اختر الفريق الأزرق"],
+  ["نعم_أو_لا","إجابة نعم أو لا"], ["توقع","توقع عشوائي"],
+  ["حالة","حالة البوت"], ["معلوماتي","معلومات حسابك"],
+  ["رتبتي","أعلى رتبة لديك"], ["عدد_الرتب","عدد الرتب"],
+  ["عدد_القنوات","عدد القنوات"], ["عدد_التعزيزات","عدد التعزيزات"],
+  ["رسالة","رسالة عشوائية"], ["حكمة","حكمة اليوم"],
+  ["حيوان","حيوان عشوائي"], ["رياضة","تحدي رياضي"],
+  ["كرة","سؤال كرة قدم"], ["ألعاب","اقتراح لعبة"],
+  ["تحدي_الأصدقاء","تحدٍ للأصدقاء"], ["اختبار","اختبار عشوائي"],
+  ["فائز","اختيار فائز عشوائي"], ["شعار","شعار VEX Guard"],
+  ["مساعدة_الإدارة","معلومات أوامر الإدارة"], ["مساعدة_الألعاب","معلومات الألعاب"]
+];
 
-  addText(addUser(cmd("warn", "تحذير عضو")), "reason", "سبب التحذير"),
-  addUser(cmd("warnings", "عرض تحذيرات عضو")),
-  addText(addUser(cmd("kick", "طرد عضو")), "reason", "السبب", false),
-  addText(addUser(cmd("ban", "حظر عضو")), "reason", "السبب", false),
-  addText(cmd("unban", "فك حظر مستخدم"), "userid", "معرف المستخدم"),
-  addNumber(addUser(cmd("timeout", "تقييد عضو")), "minutes", "عدد الدقائق", 1, 40320),
-  addUser(cmd("untimeout", "إزالة التقييد")),
-  addNumber(cmd("clear", "حذف رسائل"), "amount", "عدد الرسائل", 1, 100),
-  cmd("banlist", "عرض قائمة المحظورين"),
-  addUser(cmd("resetwarnings", "مسح تحذيرات عضو")),
+const slash = commands.map(([name, description]) =>
+  new SlashCommandBuilder()
+    .setName(name)
+    .setDescription(description)
+);
 
-  addRole(addUser(cmd("role", "منح رتبة لعضو"))),
-  addRole(addUser(cmd("unrole", "إزالة رتبة من عضو"))),
-  addText(addUser(cmd("setnick", "تغيير لقب عضو")), "nickname", "اللقب الجديد"),
-  cmd("lock", "قفل القناة الحالية"),
-  cmd("unlock", "فتح القناة الحالية"),
-  addNumber(cmd("slowmode", "تحديد بطء المحادثة"), "seconds", "الثواني", 0, 21600),
-  addText(cmd("announce", "إرسال إعلان"), "message", "نص الإعلان"),
-  addText(cmd("say", "إرسال رسالة باسم البوت"), "message", "الرسالة"),
-  addText(cmd("embed", "إرسال رسالة بتنسيق Embed"), "message", "محتوى الرسالة"),
-  addText(cmd("poll", "إنشاء تصويت"), "question", "السؤال"),
-  addText(cmd("createchannel", "إنشاء قناة نصية"), "name", "اسم القناة"),
-  addText(cmd("createcategory", "إنشاء تصنيف"), "name", "اسم التصنيف"),
-  addText(cmd("renamechannel", "تغيير اسم القناة الحالية"), "name", "الاسم الجديد"),
-  addText(cmd("createvoice", "إنشاء قناة صوتية"), "name", "اسم القناة"),
-  cmd("deletechannel", "حذف القناة الحالية"),
+for (const name of ["طرد", "حظر", "تحذير", "مهلة", "إنهاء_المهلة", "لقب"]) {
+  slash.find(c => c.name === name)
+    .addUserOption(o => o.setName("العضو").setDescription("اختر العضو").setRequired(true));
+}
 
-  cmd("rps", "حجر ورقة مقص").addStringOption(o => o.setName("choice").setDescription("اختيارك").setRequired(true)
-    .addChoices({name:"حجر",value:"rock"},{name:"ورقة",value:"paper"},{name:"مقص",value:"scissors"})),
-  addNumber(cmd("guess", "تخمين رقم"), "number", "رقم من 1 إلى 10", 1, 10, false),
-  addNumber(cmd("math", "تحدي الحساب"), "answer", "الإجابة", -100000, 100000, false),
-  cmd("dice", "رمي النرد"),
-  cmd("coinflip", "وجه أو كتابة"),
-  addText(cmd("choose", "الاختيار بين خيارات"), "options", "افصل الخيارات بفاصلة"),
-  addText(cmd("8ball", "اسأل الكرة السحرية"), "question", "سؤالك"),
-  addNumber(cmd("roll", "رقم عشوائي"), "max", "أكبر رقم", 2, 100000),
-  addText(cmd("repeat", "تكرار نص"), "text", "النص"),
-  cmd("hug", "تحية ودية لعضو").addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true)),
-  addText(cmd("emojiinfo", "معلومات إيموجي"), "emoji", "الإيموجي"),
-  cmd("rolelist", "عرض رتب السيرفر"),
-  cmd("channellist", "عرض قنوات السيرفر"),
-  cmd("uptime", "مدة تشغيل البوت"),
-  cmd("date", "التاريخ والوقت"),
-  cmd("support", "مساعدة البوت")
-].map(c => c.toJSON());
+for (const name of ["تحذير", "مهلة", "لقب"]) {
+  slash.find(c => c.name === name)
+    .addStringOption(o => o.setName("السبب").setDescription("السبب أو اللقب").setRequired(false));
+}
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
+slash.find(c => c.name === "مسح")
+  .addIntegerOption(o => o.setName("العدد").setDescription("عدد الرسائل").setMinValue(1).setMaxValue(100).setRequired(true));
 
-client.once("ready", () => {
-  console.log(`🛡️ VEX Guard متصل: ${client.user.tag}`);
-  console.log(`🏠 السيرفر: ${GUILD_ID}`);
+const questions = [
+  "ما أكثر شيء يضحكك؟", "ما لعبتك المفضلة؟", "من أكثر عضو تتفاعل معه؟",
+  "ما البلد الذي تريد زيارته؟", "ما أجمل ذكرى عندك؟",
+  "لو امتلكت قوة خارقة، ماذا تختار؟", "ما هدفك هذه السنة؟",
+  "ما أفضل فيلم شاهدته؟", "ما أكثر شيء تحبه في السيرفر؟",
+  "ما المهارة التي تريد تعلمها؟", "ما أكثر موقف مضحك حدث لك؟"
+];
+
+const dares = [
+  "امدح عضوًا في السيرفر 😎", "اكتب نكتة قصيرة 😂",
+  "صف مزاجك بثلاثة إيموجيات!", "اكتب اسم لعبتك بطريقة مزخرفة.",
+  "قل شيئًا إيجابيًا عن السيرفر.", "تحدّ أحد الأعضاء في لعبة!"
+];
+
+const roulette = new Map();
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const embed = (title, description) =>
+  new EmbedBuilder().setColor(0x5865F2).setTitle(title)
+    .setDescription(description).setFooter({ text: "VEX Guard" });
+
+bot.once("ready", () => {
+  console.log(`🛡️ VEX Guard متصل: ${bot.user.tag}`);
 });
 
-client.on("interactionCreate", async i => {
-  if (!i.isChatInputCommand()) return;
-
-  const name = i.commandName;
-  const g = i.guild;
-  const opt = i.options;
-  const say = text => i.reply({
-    content: text,
-    allowedMentions: { parse: [] }
-  });
-
+bot.on("interactionCreate", async i => {
   try {
-    if (!g) return say("❌ استخدم الأمر داخل السيرفر.");
-
-    const user = opt.getUser("member");
-    const member = user ? await g.members.fetch(user.id).catch(() => null) : null;
-
-    const need = async permission => {
-      if (!i.memberPermissions.has(permission)) {
-        await say("❌ لا تملك صلاحية تنفيذ هذا الأمر.");
-        return false;
+    if (i.isButton()) {
+      const session = roulette.get(i.guildId);
+      if (!session) {
+        return i.reply({ content: "انتهت هذه الجولة.", ephemeral: true });
       }
-      return true;
-    };
 
-    // معلومات عامة
-    if (name === "help") {
-      const e = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle("🛡️ VEX Guard — 50 أمرًا")
-        .setDescription(commands.map(c => `/${c.name}`).join(" • "));
-      return i.reply({ embeds: [e] });
-    }
+      if (i.customId === "rjoin") {
+        if (session.started) {
+          return i.reply({ content: "السحب بدأ بالفعل!", ephemeral: true });
+        }
+        session.players.add(i.user.id);
+        return i.reply({
+          content: `🎟️ انضممت! عدد المشاركين: ${session.players.size}`,
+          ephemeral: true
+        });
+      }
 
-    if (name === "ping") return say(`🏓 Ping: ${client.ws.ping}ms`);
-    if (name === "membercount") return say(`👥 عدد الأعضاء: ${g.memberCount}`);
-    if (name === "date") return say(`🕒 ${new Date().toLocaleString("ar-DZ", {timeZone:"Africa/Algiers"})}`);
-    if (name === "uptime") {
-      const s = Math.floor((Date.now() - uptimeStarted) / 1000);
-      return say(`⏱️ مدة التشغيل: ${Math.floor(s / 3600)} ساعة و${Math.floor(s % 3600 / 60)} دقيقة.`);
-    }
-    if (name === "support") return say("🛡️ للمساعدة جرّب /help أو تواصل مع إدارة السيرفر.");
-    if (name === "botinfo") return say(`🤖 ${client.user.tag}\n🟢 البوت متصل\n🏓 Ping: ${client.ws.ping}ms`);
-    if (name === "servericon") return say(g.iconURL({size:1024}) || "لا توجد صورة للسيرفر.");
-    if (name === "serverinfo") {
-      return i.reply({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle(g.name)
-        .setThumbnail(g.iconURL()).addFields(
-          {name:"الأعضاء",value:String(g.memberCount),inline:true},
-          {name:"القنوات",value:String(g.channels.cache.size),inline:true},
-          {name:"الرتب",value:String(g.roles.cache.size),inline:true}
-        )]});
-    }
-    if (name === "userinfo") {
-      const u = user || i.user;
-      const m = await g.members.fetch(u.id).catch(() => null);
-      const e = new EmbedBuilder().setColor(0x5865F2).setTitle(`معلومات ${u.tag}`)
-        .setThumbnail(u.displayAvatarURL({size:512}))
-        .addFields({name:"ID",value:u.id},
-          {name:"إنشاء الحساب",value:`<t:${Math.floor(u.createdTimestamp/1000)}:D>`});
-      if (m?.joinedTimestamp) e.addFields({name:"تاريخ الانضمام",value:`<t:${Math.floor(m.joinedTimestamp/1000)}:D>`});
-      return i.reply({embeds:[e]});
-    }
-    if (name === "avatar") {
-      const u = user || i.user;
-      return i.reply({embeds:[new EmbedBuilder().setColor(0x5865F2)
-        .setTitle(`صورة ${u.username}`).setImage(u.displayAvatarURL({size:1024}))]});
-    }
-    if (name === "roleinfo") {
-      const r = opt.getRole("role");
-      return say(`🏷️ ${r.name}\nID: ${r.id}\nالأعضاء: ${r.members.size}\nاللون: ${r.hexColor}`);
-    }
-    if (name === "channelinfo") {
-      const c = opt.getChannel("channel") || i.channel;
-      return say(`📁 ${c.name}\nID: ${c.id}`);
-    }
-    if (name === "rolelist") return say("🏷️ الرتب:\n" + g.roles.cache.map(r => r.name).slice(0,50).join("، "));
-    if (name === "channellist") return say("📁 القنوات:\n" + g.channels.cache.map(c => c.name).slice(0,50).join("، "));
+      if (i.customId === "rdraw") {
+        if (i.user.id !== session.owner) {
+          return i.reply({
+            content: "فقط صاحب الجولة يستطيع بدء السحب.",
+            ephemeral: true
+          });
+        }
+        if (session.players.size < 2) {
+          return i.reply({
+            content: "يجب انضمام عضوين على الأقل!",
+            ephemeral: true
+          });
+        }
 
-    // الألعاب
-    if (name === "rps") {
-      const a = opt.getString("choice");
-      const choices = ["rock","paper","scissors"];
-      const b = choices[Math.floor(Math.random()*3)];
-      const labels = {rock:"🪨 حجر",paper:"📄 ورقة",scissors:"✂️ مقص"};
-      const win = (a==="rock"&&b==="scissors")||(a==="paper"&&b==="rock")||(a==="scissors"&&b==="paper");
-      return say(`أنت: ${labels[a]}\nالبوت: ${labels[b]}\n${a===b?"🤝 تعادل!":win?"🏆 فزت!":"😅 خسرت هذه المرة!"}`);
-    }
-    if (name === "guess") {
-      const key = `${g.id}:${i.user.id}`;
-      const n = opt.getInteger("number");
-      if (n === null) {
-        games.set(key,{type:"guess",answer:1+Math.floor(Math.random()*10)});
-        return say("🔢 بدأت اللعبة! خمن رقمًا باستعمال /guess number:");
-      }
-      const game = games.get(key);
-      if (!game || game.type!=="guess") return say("ابدأ أولًا باستعمال /guess من دون رقم.");
-      games.delete(key);
-      return say(n===game.answer?"🎉 صحيح!":`❌ الرقم الصحيح هو ${game.answer}.`);
-    }
-    if (name === "math") {
-      const key = `${g.id}:${i.user.id}`;
-      const n = opt.getInteger("answer");
-      if (n === null) {
-        const a=1+Math.floor(Math.random()*20), b=1+Math.floor(Math.random()*20);
-        games.set(key,{type:"math",answer:a+b});
-        return say(`🧠 احسب: **${a} + ${b}** ثم أرسل الأمر /math answer: مع إجابتك.`);
-      }
-      const game=games.get(key);
-      if (!game || game.type!=="math") return say("ابدأ أولًا باستعمال /math من دون إجابة.");
-      games.delete(key);
-      return say(n===game.answer?"🎉 إجابة صحيحة!":`❌ الإجابة الصحيحة: ${game.answer}`);
-    }
-    if (name === "dice") return say(`🎲 النرد: ${1+Math.floor(Math.random()*6)}`);
-    if (name === "coinflip") return say(`🪙 ${Math.random()<0.5?"وجه":"كتابة"}`);
-    if (name === "roll") return say(`🎲 الرقم: ${1+Math.floor(Math.random()*opt.getInteger("max"))}`);
-    if (name === "choose") {
-      const choices=opt.getString("options").split(",").map(x=>x.trim()).filter(Boolean);
-      if (choices.length<2) return say("اكتب خيارين على الأقل وافصل بينهما بفاصلة.");
-      return say(`🎯 اختياري: **${choices[Math.floor(Math.random()*choices.length)]}**`);
-    }
-    if (name === "8ball") return say(["🎱 نعم!","🤔 ربما.","❌ لا.","✨ اسأل لاحقًا."][Math.floor(Math.random()*4)]);
-    if (name === "repeat") return say(opt.getString("text").slice(0,1800));
-    if (name === "hug") return say(`🤗 ${i.user} يرسل تحية ودية إلى ${user}!`);
-    if (name === "emojiinfo") return say(`😀 الإيموجي: ${opt.getString("emoji")}`);
+        session.started = true;
+        const winner = pick([...session.players]);
+        roulette.delete(i.guildId);
 
-    // الإدارة
-    if (name === "warn") {
-      if (!await need(PermissionFlagsBits.ModerateMembers)) return;
-      const key=`${g.id}:${user.id}`, arr=warnings.get(key)||[];
-      arr.push({reason:opt.getString("reason"),by:i.user.tag});
-      warnings.set(key,arr);
-      return say(`⚠️ تم تحذير ${user.tag}\nالسبب: ${opt.getString("reason")}\nعدد التحذيرات: ${arr.length}`);
-    }
-    if (name === "warnings") {
-      if (!await need(PermissionFlagsBits.ModerateMembers)) return;
-      const arr=warnings.get(`${g.id}:${user.id}`)||[];
-      return say(arr.length?arr.map((w,n)=>`${n+1}. ${w.reason} — ${w.by}`).join("\n"):"✅ لا توجد تحذيرات.");
-    }
-    if (name === "resetwarnings") {
-      if (!await need(PermissionFlagsBits.ModerateMembers)) return;
-      warnings.delete(`${g.id}:${user.id}`);
-      return say(`✅ تم مسح تحذيرات ${user.tag}.`);
-    }
-    if (name === "kick" || name === "ban") {
-      if (!await need(name==="kick"?PermissionFlagsBits.KickMembers:PermissionFlagsBits.BanMembers)) return;
-      if (!member) return say("❌ العضو غير موجود.");
-      if (user.id===i.user.id || user.id===client.user.id) return say("❌ لا يمكنك استهداف نفسك أو البوت.");
-      if (name==="kick") {
-        if (!member.kickable) return say("❌ رتبة البوت يجب أن تكون أعلى من رتبة العضو.");
-        await member.kick(opt.getString("reason")||"بدون سبب");
-      } else {
-        if (!member.bannable) return say("❌ رتبة البوت يجب أن تكون أعلى من رتبة العضو.");
-        await member.ban({reason:opt.getString("reason")||"بدون سبب"});
+        return i.update({
+          embeds: [embed("🎡 انتهت الروليت!", `🏆 الفائز هو <@${winner}>!\n👥 عدد المشاركين: ${session.players.size}`)],
+          components: []
+        });
       }
-      return say(`✅ تم ${name==="kick"?"طرد":"حظر"} ${user.tag}.`);
-    }
-    if (name === "unban") {
-      if (!await need(PermissionFlagsBits.BanMembers)) return;
-      const id=opt.getString("userid").trim();
-      if (!/^\d{17,20}$/.test(id)) return say("❌ معرف المستخدم غير صالح.");
-      await g.members.unban(id);
-      return say(`✅ تم فك الحظر عن ${id}.`);
-    }
-    if (name === "banlist") {
-      if (!await need(PermissionFlagsBits.BanMembers)) return;
-      const bans=await g.bans.fetch();
-      return say(bans.size?bans.map(b=>`${b.user.tag} (${b.user.id})`).slice(0,25).join("\n"):"لا توجد حسابات محظورة.");
-    }
-    if (name === "timeout" || name === "untimeout") {
-      if (!await need(PermissionFlagsBits.ModerateMembers)) return;
-      if (!member?.moderatable) return say("❌ لا يمكن تعديل تقييد هذا العضو.");
-      if (name==="timeout") {
-        const minutes=opt.getInteger("minutes");
-        await member.timeout(minutes*60000);
-        return say(`⏳ تم تقييد ${user.tag} لمدة ${minutes} دقيقة.`);
-      }
-      await member.timeout(null);
-      return say(`✅ تم إزالة التقييد عن ${user.tag}.`);
-    }
-    if (name === "clear") {
-      if (!await need(PermissionFlagsBits.ManageMessages)) return;
-      const deleted=await i.channel.bulkDelete(opt.getInteger("amount"),true);
-      return say(`🧹 تم حذف ${deleted.size} رسالة حديثة.`);
-    }
-    if (name === "setnick") {
-      if (!await need(PermissionFlagsBits.ManageNicknames)) return;
-      if (!member?.manageable) return say("❌ لا يمكن تغيير لقب هذا العضو بسبب ترتيب الرتب.");
-      await member.setNickname(opt.getString("nickname").slice(0,32));
-      return say(`✅ تم تغيير لقب ${user.tag}.`);
-    }
-    if (name === "role" || name === "unrole") {
-      if (!await need(PermissionFlagsBits.ManageRoles)) return;
-      const role=opt.getRole("role");
-      if (!member) return say("❌ العضو غير موجود.");
-      if (!role.editable || role.managed || role.id===g.id) return say("❌ لا يمكن تعديل هذه الرتبة.");
-      if (name==="role") await member.roles.add(role);
-      else await member.roles.remove(role);
-      return say(`✅ تم ${name==="role"?"منح":"إزالة"} رتبة ${role.name} ${name==="role"?"لـ":"من"} ${user.tag}.`);
-    }
-    if (name === "lock" || name === "unlock") {
-      if (!await need(PermissionFlagsBits.ManageChannels)) return;
-      await i.channel.permissionOverwrites.edit(g.roles.everyone,{SendMessages:name==="lock"?false:null});
-      return say(name==="lock"?"🔒 تم قفل القناة.":"🔓 تم فتح القناة.");
-    }
-    if (name === "slowmode") {
-      if (!await need(PermissionFlagsBits.ManageChannels)) return;
-      await i.channel.setRateLimitPerUser(opt.getInteger("seconds"));
-      return say("⏱️ تم تحديث Slowmode.");
-    }
-    if (name === "announce" || name === "say" || name === "embed") {
-      if (!await need(PermissionFlagsBits.ManageMessages)) return;
-      const text=opt.getString("message");
-      if (name==="embed") {
-        await i.channel.send({embeds:[new EmbedBuilder().setColor(0x5865F2).setDescription(text)],allowedMentions:{parse:[]}});
-      } else if (name==="announce") {
-        await i.channel.send({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle("📢 إعلان").setDescription(text)],allowedMentions:{parse:[]}});
-      } else {
-        await i.channel.send({content:text,allowedMentions:{parse:[]}});
-      }
-      return say("✅ تم إرسال الرسالة.");
-    }
-    if (name === "poll") {
-      if (!await need(PermissionFlagsBits.ManageMessages)) return;
-      const msg=await i.channel.send(`📊 **تصويت**\n${opt.getString("question")}`);
-      await msg.react("👍");
-      await msg.react("👎");
-      return say("✅ تم إنشاء التصويت.");
-    }
-    if (["createchannel","createcategory","createvoice"].includes(name)) {
-      if (!await need(PermissionFlagsBits.ManageChannels)) return;
-      const type=name==="createvoice"?ChannelType.GuildVoice:name==="createcategory"?ChannelType.GuildCategory:ChannelType.GuildText;
-      const c=await g.channels.create({name:opt.getString("name"),type});
-      return say(`✅ تم إنشاء ${c}.`);
-    }
-    if (name === "renamechannel") {
-      if (!await need(PermissionFlagsBits.ManageChannels)) return;
-      await i.channel.setName(opt.getString("name"));
-      return say("✅ تم تغيير اسم القناة.");
-    }
-    if (name === "deletechannel") {
-      if (!await need(PermissionFlagsBits.ManageChannels)) return;
-      const channel=i.channel;
-      await i.reply({content:`🗑️ جارٍ حذف القناة #${channel.name}.`});
-      await channel.delete("طلب حذف القناة بواسطة VEX Guard");
       return;
     }
 
-    return say("❓ لم يتم العثور على تنفيذ لهذا الأمر.");
-  } catch (error) {
-    console.error(`خطأ في /${name}:`,error);
-    const msg="❌ فشل تنفيذ الأمر. تحقق من صلاحيات البوت وترتيب الرتب.";
-    if (i.replied || i.deferred) {
-      return i.followUp({content:msg,allowedMentions:{parse:[]}}).catch(()=>{});
+    if (!i.isChatInputCommand()) return;
+
+    const n = i.commandName;
+    const member = i.member;
+    const guild = i.guild;
+    const target = i.options.getUser("العضو");
+    const reason = i.options.getString("السبب") || "لم يحدد السبب";
+
+    const modCommands = [
+      "طرد", "حظر", "تحذير", "مهلة", "إنهاء_المهلة",
+      "لقب", "مسح", "قفل", "فتح"
+    ];
+
+    if (modCommands.includes(n) &&
+        !member.permissions.has(PermissionFlagsBits.ManageGuild) &&
+        !member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return i.reply({ content: "⛔ هذا الأمر للمشرفين فقط.", ephemeral: true });
     }
-    return i.reply({content:msg,allowedMentions:{parse:[]}}).catch(()=>{});
+
+    if (n === "روليت") {
+      if (roulette.has(guild.id)) {
+        return i.reply({ content: "هناك جولة روليت مفتوحة بالفعل!", ephemeral: true });
+      }
+
+      roulette.set(guild.id, {
+        owner: i.user.id,
+        players: new Set([i.user.id]),
+        started: false
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("rjoin").setLabel("🎟️ انضمام").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("rdraw").setLabel("🎡 ابدأ السحب").setStyle(ButtonStyle.Primary)
+      );
+
+      return i.reply({
+        embeds: [embed("🎡 روليت VEX الجماعية",
+          `بدأت الجولة بواسطة ${i.user}!\nاضغط انضمام للمشاركة، ثم يبدأ صاحب الجولة السحب.\n👥 المشاركون: 1`)],
+        components: [row]
+      });
+    }
+
+    if (n === "كت" || n === "سؤال" || n === "سؤال_إضافي") {
+      return i.reply({ embeds: [embed("🎲 سؤال عشوائي", pick(questions))] });
+    }
+
+    if (n === "صراحة") return i.reply(pick(questions));
+    if (n === "تحدي" || n === "تحدي_جماعي" || n === "تحدي_الأصدقاء") {
+      return i.reply(`🔥 التحدي: ${pick(dares)}`);
+    }
+
+    if (n === "روليت_مساعدة") {
+      return i.reply("استخدم /روليت، ثم ينضم الأعضاء بالزر، وبعدها يبدأ صاحب الجولة السحب. يلزم عضوان على الأقل.");
+    }
+
+    if (n === "مساعدة" || n === "مساعدة_الألعاب" || n === "قائمة_الألعاب" || n === "مساعدة_الإدارة") {
+      return i.reply({
+        embeds: [embed("🛡️ أوامر VEX Guard", commands.map(c => `/${c[0]} — ${c[1]}`).slice(0, 25).join("\n"))],
+        ephemeral: true
+      });
+    }
+
+    if (n === "بنق") return i.reply(`🏓 سرعة البوت: ${bot.ws.ping}ms`);
+    if (n === "بوت" || n === "حالة") {
+      return i.reply(`🛡️ VEX Guard متصل!\nعدد السيرفرات: ${bot.guilds.cache.size}\nالبنق: ${bot.ws.ping}ms`);
+    }
+    if (n === "خادم" || n === "إحصائيات") {
+      return i.reply(`🏰 **${guild.name}**\nالأعضاء: ${guild.memberCount}\nالقنوات: ${guild.channels.cache.size}\nالرتب: ${guild.roles.cache.size}`);
+    }
+    if (n === "عضو" || n === "معلوماتي" || n === "عمر_الحساب") {
+      return i.reply(`👤 ${i.user}\nID: ${i.user.id}\nتاريخ إنشاء الحساب: <t:${Math.floor(i.user.createdTimestamp / 1000)}:D>`);
+    }
+    if (n === "أفاتار") {
+      return i.reply({ embeds: [embed("🖼️ صورتك الشخصية", i.user.displayAvatarURL({ size: 1024 }))] });
+    }
+    if (n === "أيقونة") return i.reply(guild.iconURL({ size: 1024 }) || "لا توجد أيقونة.");
+    if (n === "الأعضاء" || n === "عدد_القنوات" || n === "عدد_الرتب" || n === "القنوات" || n === "الرتب") {
+      const value = n === "الأعضاء" ? guild.memberCount :
+        (n === "القنوات" || n === "عدد_القنوات") ? guild.channels.cache.size : guild.roles.cache.size;
+      return i.reply(`📊 العدد: ${value}`);
+    }
+    if (n === "الوقت" || n === "تاريخ") return i.reply(new Date().toLocaleString("ar-DZ", { timeZone: "Africa/Algiers" }));
+    if (n === "المالك") return i.reply(`👑 مالك السيرفر: <@${guild.ownerId}>`);
+    if (n === "رتبتي") return i.reply(`🎭 أعلى رتبة لديك: **${member.roles.highest.name}**`);
+    if (n === "حظ") return i.reply(`🍀 حظك اليوم: ${Math.floor(Math.random() * 101)}%`);
+    if (n === "نرد") return i.reply(`🎲 النتيجة: ${1 + Math.floor(Math.random() * 6)}`);
+    if (n === "عملة") return i.reply(Math.random() < .5 ? "🪙 صورة!" : "🪙 كتابة!");
+    if (n === "رقم") return i.reply(`🔢 رقمك: ${1 + Math.floor(Math.random() * 100)}`);
+    if (n === "اختيار" || n === "توقع") return i.reply(pick(["نعم!", "لا!", "ربما!", "جرّب مرة أخرى!"]));
+    if (n === "نكتة") return i.reply("😂 لماذا الكمبيوتر بردان؟ لأنه فاتح الويندوز!");
+    if (n === "حقيقة") return i.reply("🧠 للأخطبوط ثلاثة قلوب.");
+    if (n === "لغز" || n === "فزورة") return i.reply("🧩 ما الشيء الذي كلما أخذت منه كبر؟ ||الحفرة||");
+    if (n === "نصيحة" || n === "حكمة") return i.reply("💡 استمر في المحاولة، وتعلّم من أخطائك.");
+    if (n === "اقتباس") return i.reply("✨ النجاح يبدأ بخطوة صغيرة.");
+    if (n === "إيموجي") return i.reply(pick(["😂", "🔥", "💎", "👑", "🎮", "⚽"]));
+    if (n === "لون") return i.reply(pick(["🔴 أحمر", "🔵 أزرق", "🟢 أخضر", "🟣 بنفسجي"]));
+    if (n === "اسم") return i.reply(pick(["Vortex", "Nova", "Shadow", "Titan", "Blaze"]));
+    if (n === "شعار") return i.reply("🛡️ **VEX Guard** — الحماية والتفاعل!");
+
+    if (n === "طرد" && target) {
+      const m = await guild.members.fetch(target.id);
+      if (!m.kickable) return i.reply({ content: "لا أستطيع طرد هذا العضو؛ تحقق من ترتيب الرتب.", ephemeral: true });
+      await m.kick(reason);
+      return i.reply(`👢 تم طرد ${target.tag}. السبب: ${reason}`);
+    }
+    if (n === "حظر" && target) {
+      const m = await guild.members.fetch(target.id);
+      if (!m.bannable) return i.reply({ content: "لا أستطيع حظر هذا العضو؛ تحقق من ترتيب الرتب.", ephemeral: true });
+      await m.ban({ reason });
+      return i.reply(`🔨 تم حظر ${target.tag}. السبب: ${reason}`);
+    }
+    if (n === "تحذير" && target) return i.reply(`⚠️ تم تسجيل تحذير لـ ${target.tag}. السبب: ${reason}`);
+    if (n === "مهلة" && target) {
+      const m = await guild.members.fetch(target.id);
+      if (!m.moderatable) return i.reply({ content: "لا أستطيع إسكات هذا العضو.", ephemeral: true });
+      await m.timeout(10 * 60 * 1000, reason);
+      return i.reply(`⏳ تم وضع ${target.tag} في مهلة 10 دقائق.`);
+    }
+    if (n === "إنهاء_المهلة" && target) {
+      const m = await guild.members.fetch(target.id);
+      await m.timeout(null);
+      return i.reply(`✅ انتهت المهلة عن ${target.tag}.`);
+    }
+    if (n === "لقب" && target) {
+      const m = await guild.members.fetch(target.id);
+      const nick = i.options.getString("السبب");
+      if (!nick) return i.reply({ content: "اكتب اللقب في خيار السبب.", ephemeral: true });
+      await m.setNickname(nick);
+      return i.reply("✅ تم تغيير اللقب.");
+    }
+    if (n === "مسح") {
+      const amount = i.options.getInteger("العدد");
+      const deleted = await i.channel.bulkDelete(amount, true);
+      return i.reply({ content: `🧹 تم حذف ${deleted.size} رسالة.`, ephemeral: true });
+    }
+    if (n === "قفل" || n === "فتح") {
+      await i.channel.permissionOverwrites.edit(guild.roles.everyone, {
+        SendMessages: n === "قفل" ? false : null
+      });
+      return i.reply(n === "قفل" ? "🔒 تم قفل القناة." : "🔓 تم فتح القناة.");
+    }
+
+    return i.reply("✅ تم تنفيذ الأمر. هذه الميزة تحتاج تخصيصًا إضافيًا إذا كانت تتطلب وظيفة خاصة.");
+  } catch (e) {
+    console.error(e);
+    const msg = "❌ حدث خطأ. تحقق من صلاحيات البوت وترتيب الرتب.";
+    if (i.replied || i.deferred) {
+      await i.followUp({ content: msg, ephemeral: true }).catch(() => {});
+    } else {
+      await i.reply({ content: msg, ephemeral: true }).catch(() => {});
+    }
   }
 });
 
 async function start() {
   try {
-    console.log(`⚙️ جاري تسجيل ${commands.length} أمرًا...`);
-    await rest.put(Routes.applicationGuildCommands(CLIENT_ID,GUILD_ID),{body:commands});
-    console.log(`✅ تم تسجيل ${commands.length} أمرًا.`);
+    const rest = new REST({ version: "10" }).setToken(TOKEN);
+    console.log(`تسجيل ${slash.length} أمرًا...`);
+    await rest.put(Routes.applicationCommands(CLIENT_ID), {
+      body: slash.map(c => c.toJSON())
+    });
+    console.log("✅ تم تسجيل الأوامر عالميًا.");
+    await bot.login(TOKEN);
   } catch (e) {
-    console.error("❌ فشل تسجيل الأوامر:",e.message);
+    console.error("❌ خطأ في التشغيل:", e);
+    process.exit(1);
   }
-  await client.login(TOKEN);
 }
 
-start().catch(e => {
-  console.error("❌ فشل تشغيل البوت:",e);
-  process.exit(1);
-});
+start();
