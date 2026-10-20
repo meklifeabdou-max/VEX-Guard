@@ -9,27 +9,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get bot code
+      - name: تحميل ملفات المستودع
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: إعداد Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Check files
+      - name: التحقق من وجود index.js
         run: |
-          echo "Repository root:"
+          echo "ملفات الصفحة الرئيسية:"
           ls -la
-          echo "Workflow folder:"
-          ls -la .github/workflows
+          test -f index.js || (echo "خطأ: ملف index.js غير موجود في الصفحة الرئيسية!" && exit 1)
 
-      - name: Install dependencies
-        run: |
-          npm init -y
-          npm install discord.js
+      - name: تثبيت مكتبة Discord
+        run: npm install discord.js
 
-      - name: Start VEX Guard
-        run: node .github/workflows/index.js
+      - name: تشغيل VEX Guard
+        run: node index.js
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
