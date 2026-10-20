@@ -2,26 +2,30 @@
 name: VEX Guard
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  start-bot:
+  run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      - name: تحميل ملفات المستودع
+      - name: Get repository files
         uses: actions/checkout@v4
 
-      - name: إعداد Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: تثبيت المكتبات
+      - name: Install dependencies
         run: npm install discord.js
 
-      - name: تشغيل VEX Guard
-        run: node index.js
+      - name: Start VEX Guard
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          GUILD_ID: ${{ secrets.GUILD_ID }}
+        run: node vex.js
