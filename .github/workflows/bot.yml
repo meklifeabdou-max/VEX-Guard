@@ -7,6 +7,7 @@ on:
 jobs:
   start-bot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Get bot code
         uses: actions/checkout@v4
@@ -16,12 +17,54 @@ jobs:
         with:
           node-version: 20
 
+      - name: Check files
+        run: |
+          echo "Repository root:"
+          ls -la
+          echo "Workflow folder:"
+          ls -la .github/workflows
+
       - name: Install dependencies
         run: |
           npm init -y
           npm install discord.js
 
       - name: Start VEX Guard
-        run: node index.js
+        run: node .github/workflows/index.js
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+
+name: VEX Guard
+
+on:
+  workflow_dispatch:
+
+jobs:
+  start-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get bot code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check files
+        run: |
+          echo "Repository root:"
+          ls -la
+          echo "Workflow folder:"
+          ls -la .github/workflows
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install discord.js
+
+      - name: Start VEX Guard
+        run: node .github/workflows/index.js
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
