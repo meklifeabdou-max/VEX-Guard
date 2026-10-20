@@ -1,80 +1,78 @@
 
 const {
-  Client,
-  GatewayIntentBits,
-  PermissionFlagsBits,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-  EmbedBuilder
+  Client, GatewayIntentBits, PermissionFlagsBits,
+  SlashCommandBuilder, REST, Routes, EmbedBuilder,
+  ChannelType
 } = require("discord.js");
 
 const fs = require("node:fs");
-const path = require("node:path");
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const REPO = process.env.GITHUB_REPOSITORY;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
-const SHORTCUTS_FILE = path.join(__dirname, "shortcuts.json");
 
 if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
   throw new Error("تأكد من DISCORD_TOKEN وCLIENT_ID وGUILD_ID.");
 }
 
-let shortcuts = {};
-const warnings = new Map();
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
+});
 
-const fixedCommands = [
-  new SlashCommandBuilder().setName("help").setDescription("عرض جميع الأوامر"),
-  new SlashCommandBuilder().setName("warn").setDescription("تحذير عضو")
+const warnings = new Map();
+const localFile = "shortcuts.json";
+let shortcuts = {};
+
+const command = (name, description) =>
+  new SlashCommandBuilder().setName(name).setDescription(description);
+
+const commands = [
+  command("help", "عرض الأوامر"),
+  command("warn", "تحذير عضو")
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true))
     .addStringOption(o => o.setName("reason").setDescription("السبب").setRequired(true)),
-  new SlashCommandBuilder().setName("warnings").setDescription("عرض تحذيرات عضو")
+  command("warnings", "عرض تحذيرات عضو")
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true)),
-  new SlashCommandBuilder().setName("kick").setDescription("طرد عضو")
+  command("kick", "طرد عضو")
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true))
     .addStringOption(o => o.setName("reason").setDescription("السبب")),
-  new SlashCommandBuilder().setName("ban").setDescription("حظر عضو")
+  command("ban", "حظر عضو")
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true))
     .addStringOption(o => o.setName("reason").setDescription("السبب")),
-  new SlashCommandBuilder().setName("unban").setDescription("فك حظر مستخدم")
+  command("unban", "فك حظر مستخدم")
     .addStringOption(o => o.setName("userid").setDescription("ID المستخدم").setRequired(true)),
-  new SlashCommandBuilder().setName("timeout").setDescription("إعطاء تايم أوت")
+  command("timeout", "إعطاء تايم أوت")
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true))
-    .addIntegerOption(o => o.setName("minutes").setDescription("المدة بالدقائق").setRequired(true).setMinValue(1).setMaxValue(40320))
-    .addStringOption(o => o.setName("reason").setDescription("السبب")),
-  new SlashCommandBuilder().setName("untimeout").setDescription("إزالة التايم أوت")
+    .addIntegerOption(o => o.setName("minutes").setDescription("الدقائق").setRequired(true).setMinValue(1).setMaxValue(40320)),
+  command("untimeout", "إزالة التايم أوت")
     .addUserOption(o => o.setName("member").setDescription("العضو").setRequired(true)),
-  new SlashCommandBuilder().setName("clear").setDescription("حذف رسائل")
-    .addIntegerOption(o => o.setName("amount").setDescription("عدد الرسائل 1-100").setRequired(true).setMinValue(1).setMaxValue(100)),
-  new SlashCommandBuilder().setName("lock").setDescription("قفل الروم"),
-  new SlashCommandBuilder().setName("unlock").setDescription("فتح الروم"),
-  new SlashCommandBuilder().setName("slowmode").setDescription("تحديد بطء المحادثة")
-    .addIntegerOption(o => o.setName("seconds").setDescription("المدة بالثواني").setRequired(true).setMinValue(0).setMaxValue(21600)),
-  new SlashCommandBuilder().setName("announce").setDescription("إرسال إعلان")
-    .addStringOption(o => o.setName("message").setDescription("نص الإعلان").setRequired(true))
-    .addChannelOption(o => o.setName("channel").setDescription("الروم المستهدف")),
-  new SlashCommandBuilder().setName("userinfo").setDescription("معلومات عضو")
+  command("clear", "حذف رسائل")
+    .addIntegerOption(o => o.setName("amount").setDescription("العدد 1-100").setRequired(true).setMinValue(1).setMaxValue(100)),
+  command("lock", "قفل الروم"),
+  command("unlock", "فتح الروم"),
+  command("slowmode", "تحديد بطء المحادثة")
+    .addIntegerOption(o => o.setName("seconds").setDescription("الثواني").setRequired(true).setMinValue(0).setMaxValue(21600)),
+  command("announce", "إرسال إعلان")
+    .addStringOption(o => o.setName("message").setDescription("الإعلان").setRequired(true))
+    .addChannelOption(o => o.setName("channel").setDescription("الروم")),
+  command("userinfo", "معلومات عضو")
     .addUserOption(o => o.setName("member").setDescription("العضو")),
-  new SlashCommandBuilder().setName("ticket-setup").setDescription("إنشاء لوحة التكت"),
-  new SlashCommandBuilder().setName("game").setDescription("اقتراح لعبة"),
-  new SlashCommandBuilder().setName("games").setDescription("عرض ألعاب مقترحة"),
-  new SlashCommandBuilder().setName("shortcut-create").setDescription("إنشاء أمر سلاش مخصص")
-    .addStringOption(o => o.setName("name").setDescription("اسم الأمر بدون /").setRequired(true))
-    .addStringOption(o => o.setName("message").setDescription("الرسالة التي سيرسلها الأمر").setRequired(true)),
-  new SlashCommandBuilder().setName("shortcut-delete").setDescription("حذف أمر سلاش مخصص")
-    .addStringOption(o => o.setName("name").setDescription("اسم الأمر بدون /").setRequired(true)),
-  new SlashCommandBuilder().setName("shortcuts").setDescription("عرض الاختصارات المخصصة")
+  command("serverinfo", "معلومات السيرفر"),
+  command("ticket-setup", "إعداد لوحة التكت"),
+  command("game", "اقتراح لعبة"),
+  command("games", "عرض الألعاب"),
+  command("shortcut-create", "إنشاء أمر سلاش")
+    .addStringOption(o => o.setName("name").setDescription("اسم الأمر بالإنجليزية").setRequired(true))
+    .addStringOption(o => o.setName("message").setDescription("رسالة الاختصار").setRequired(true)),
+  command("shortcut-delete", "حذف أمر سلاش")
+    .addStringOption(o => o.setName("name").setDescription("اسم الأمر").setRequired(true)),
+  command("shortcuts", "عرض الاختصارات")
 ].map(c => c.toJSON());
 
 const games = [
@@ -87,345 +85,370 @@ const games = [
 ];
 
 async function loadShortcuts() {
-  if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
-    try {
-      const response = await fetch(
-        `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/contents/shortcuts.json`,
-        { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } }
-      );
+  if (GITHUB_TOKEN && REPO) {
+    const url = `https://api.github.com/repos/${REPO}/contents/shortcuts.json`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" }
+    });
 
-      if (response.ok) {
-        const file = await response.json();
-        shortcuts = JSON.parse(Buffer.from(file.content, "base64").toString("utf8"));
-      } else if (response.status !== 404) {
-        console.error("تعذر قراءة الاختصارات من GitHub:", response.status);
-      }
-    } catch (error) {
-      console.error("تعذر تحميل الاختصارات:", error.message);
+    if (res.status === 404) {
+      shortcuts = {};
+      return;
     }
-  } else if (fs.existsSync(SHORTCUTS_FILE)) {
-    shortcuts = JSON.parse(fs.readFileSync(SHORTCUTS_FILE, "utf8"));
+    if (!res.ok) throw new Error(`تعذر قراءة shortcuts.json: ${res.status}`);
+
+    const file = await res.json();
+    shortcuts = JSON.parse(Buffer.from(file.content, "base64").toString("utf8"));
+  } else {
+    shortcuts = fs.existsSync(localFile)
+      ? JSON.parse(fs.readFileSync(localFile, "utf8"))
+      : {};
   }
 }
 
 async function saveShortcuts() {
   const content = JSON.stringify(shortcuts, null, 2);
 
-  if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
-    const url = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/contents/shortcuts.json`;
+  if (GITHUB_TOKEN && REPO) {
+    const url = `https://api.github.com/repos/${REPO}/contents/shortcuts.json`;
     const headers = {
-      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json"
     };
 
-    const previous = await fetch(url, { headers });
+    const old = await fetch(url, { headers });
     let sha;
 
-    if (previous.ok) sha = (await previous.json()).sha;
-    else if (previous.status !== 404) throw new Error("تعذر قراءة ملف الاختصارات من GitHub.");
+    if (old.ok) sha = (await old.json()).sha;
+    else if (old.status !== 404) throw new Error(`فشل قراءة ملف الاختصارات: ${old.status}`);
 
-    const result = await fetch(url, {
+    const res = await fetch(url, {
       method: "PUT",
       headers,
       body: JSON.stringify({
         message: "Update VEX Guard shortcuts",
-        content: Buffer.from(content, "utf8").toString("base64"),
+        content: Buffer.from(content).toString("base64"),
         ...(sha ? { sha } : {})
       })
     });
 
-    if (!result.ok) throw new Error(`فشل حفظ الاختصارات في GitHub: ${result.status}`);
+    if (!res.ok) throw new Error(`فشل حفظ الاختصارات: ${res.status}`);
   } else {
-    fs.writeFileSync(SHORTCUTS_FILE, content);
+    fs.writeFileSync(localFile, content);
   }
 }
 
 async function registerCommands() {
-  const custom = Object.entries(shortcuts).map(([name]) =>
-    new SlashCommandBuilder()
-      .setName(name)
-      .setDescription(`اختصار مخصص: ${name}`)
-      .toJSON()
+  const custom = Object.keys(shortcuts).map(name =>
+    command(name, `اختصار مخصص: ${name}`).toJSON()
   );
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
   await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
-    body: [...fixedCommands, ...custom]
+    body: [...commands, ...custom]
   });
 }
 
-function isAdmin(interaction) {
-  return interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+function admin(i) {
+  return i.memberPermissions?.has(PermissionFlagsBits.Administrator);
 }
 
-async function logAction(guild, message) {
+async function log(guild, message) {
   if (!LOG_CHANNEL_ID) return;
   try {
-    const channel = await guild.channels.fetch(LOG_CHANNEL_ID);
-    if (channel?.isTextBased()) await channel.send(`📋 ${message}`);
-  } catch (error) {
-    console.error("تعذر إرسال سجل الإدارة:", error.message);
+    const ch = await guild.channels.fetch(LOG_CHANNEL_ID);
+    if (ch?.isTextBased()) await ch.send(message);
+  } catch (e) {
+    console.error("Log error:", e.message);
   }
 }
 
 client.once("ready", async () => {
   console.log(`✅ VEX Guard يعمل باسم ${client.user.tag}`);
-
   try {
     await loadShortcuts();
     await registerCommands();
     console.log("✅ تم تسجيل أوامر XR والاختصارات.");
-  } catch (error) {
-    console.error("خطأ أثناء تسجيل الأوامر:", error);
+  } catch (e) {
+    console.error("Startup error:", e);
   }
 });
 
-client.on("interactionCreate", async interaction => {
+client.on("interactionCreate", async i => {
   try {
-    if (interaction.isButton()) {
-      if (interaction.customId === "vex_ticket") {
-        const existing = interaction.guild.channels.cache.find(
-          c => c.name === `ticket-${interaction.user.id}`.slice(0, 90)
-        );
-        if (existing) {
-          return interaction.reply({ content: `لديك تكت مفتوح: ${existing}`, ephemeral: true });
-        }
-
-        const channel = await interaction.guild.channels.create({
-          name: `ticket-${interaction.user.id}`.slice(0, 90),
-          permissionOverwrites: [
-            { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-            { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-            { id: client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] }
-          ]
-        });
-
-        return interaction.reply({ content: `🎫 تم إنشاء تكتك: ${channel}`, ephemeral: true });
-      }
+    // نؤجل الرد فورًا لتفادي انتهاء مهلة التفاعل.
+    if (i.isChatInputCommand()) {
+      await i.deferReply({ ephemeral: true });
+    } else if (i.isButton()) {
+      await i.deferReply({ ephemeral: true });
+    } else {
+      return;
     }
 
-    if (!interaction.isChatInputCommand()) return;
+    const reply = content => i.editReply(
+      typeof content === "string" ? { content } : content
+    );
 
-    const { commandName, guild, member } = interaction;
+    if (i.isButton()) {
+      if (i.customId !== "vex_ticket") return reply("هذا الزر غير معروف.");
 
-    if (shortcuts[commandName]) {
-      return interaction.reply(shortcuts[commandName].slice(0, 2000));
-    }
+      const existing = i.guild.channels.cache.find(
+        c => c.name === `ticket-${i.user.id}`
+      );
 
-    if (commandName === "help") {
-      return interaction.reply({
-        content: "**أوامر VEX Guard**\n" +
-          "`/warn` `/warnings` `/kick` `/ban` `/unban` `/timeout` `/untimeout`\n" +
-          "`/clear` `/lock` `/unlock` `/slowmode` `/announce` `/userinfo`\n" +
-          "`/ticket-setup` `/game` `/games` `/shortcut-create` `/shortcut-delete` `/shortcuts`",
-        ephemeral: true
+      if (existing) return reply(`لديك تكت مفتوح بالفعل: ${existing}`);
+
+      const ch = await i.guild.channels.create({
+        name: `ticket-${i.user.id}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: i.guild.roles.everyone.id,
+            deny: [PermissionFlagsBits.ViewChannel]
+          },
+          {
+            id: i.user.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.ReadMessageHistory
+            ]
+          },
+          {
+            id: client.user.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.ManageChannels
+            ]
+          }
+        ]
       });
+
+      return reply(`🎫 تم إنشاء تكتك: ${ch}`);
     }
 
-    if (commandName === "game") {
-      return interaction.reply(games[Math.floor(Math.random() * games.length)]);
+    const name = i.commandName;
+    const guild = i.guild;
+
+    if (Object.hasOwn(shortcuts, name)) return reply(shortcuts[name]);
+
+    if (name === "help") {
+      return reply("**أوامر VEX Guard**\n" +
+        commands.map(c => `/${c.name}`).join(" • "));
     }
 
-    if (commandName === "games") {
-      return interaction.reply("🎮 **ألعاب وتحديات مقترحة**\n" + games.join("\n"));
+    if (name === "game") {
+      return reply(games[Math.floor(Math.random() * games.length)]);
     }
 
-    if (["shortcut-create", "shortcut-delete", "shortcuts"].includes(commandName)) {
-      if (!isAdmin(interaction)) {
-        return interaction.reply({ content: "❌ هذا الأمر للإدارة فقط.", ephemeral: true });
-      }
+    if (name === "games") return reply(games.join("\n"));
 
-      if (commandName === "shortcuts") {
-        const list = Object.keys(shortcuts);
-        return interaction.reply({
-          content: list.length ? list.map(n => `/${n}`).join("\n") : "لا توجد اختصارات حتى الآن.",
-          ephemeral: true
-        });
-      }
-
-      if (commandName === "shortcut-create") {
-        const name = interaction.options.getString("name").toLowerCase();
-        const message = interaction.options.getString("message");
-
-        if (!/^[a-z0-9_-]{1,32}$/.test(name)) {
-          return interaction.reply({ content: "❌ الاسم يجب أن يحتوي على حروف إنجليزية صغيرة أو أرقام أو _ أو -، وبحد أقصى 32 حرفًا.", ephemeral: true });
-        }
-
-        if (fixedCommands.some(c => c.name === name)) {
-          return interaction.reply({ content: "❌ هذا الاسم مستخدم بالفعل لأمر أساسي.", ephemeral: true });
-        }
-
-        if (shortcuts[name]) {
-          return interaction.reply({ content: "❌ هذا الاختصار موجود بالفعل.", ephemeral: true });
-        }
-
-        shortcuts[name] = message.slice(0, 2000);
-
-        try {
-          await saveShortcuts();
-          await registerCommands();
-          return interaction.reply(`✅ تم إنشاء الأمر **/${name}**. قد تحتاج قائمة Discord إلى لحظات لتحديث الأوامر.`);
-        } catch (error) {
-          delete shortcuts[name];
-          console.error(error);
-          return interaction.reply({ content: "❌ لم أستطع حفظ الاختصار أو تسجيله. راجع إعدادات GitHub وسجلات Actions.", ephemeral: true });
-        }
-      }
-
-      if (commandName === "shortcut-delete") {
-        const name = interaction.options.getString("name").toLowerCase();
-        if (!shortcuts[name]) {
-          return interaction.reply({ content: "❌ لم أجد هذا الاختصار.", ephemeral: true });
-        }
-
-        const old = shortcuts[name];
-        delete shortcuts[name];
-
-        try {
-          await saveShortcuts();
-          await registerCommands();
-          return interaction.reply(`✅ تم حذف الأمر **/${name}**.`);
-        } catch (error) {
-          shortcuts[name] = old;
-          console.error(error);
-          return interaction.reply({ content: "❌ تعذر حذف الاختصار. راجع سجلات Actions.", ephemeral: true });
-        }
-      }
-    }
-
-    if (commandName === "ticket-setup") {
-      if (!isAdmin(interaction)) return interaction.reply({ content: "❌ للإدارة فقط.", ephemeral: true });
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 الدعم الفني | XR")
-        .setDescription("اضغط الزر بالأسفل لفتح تكت خاص مع الإدارة.")
-        .setColor(0x5865F2);
-
-      return interaction.reply({
-        embeds: [embed],
-        components: [{
-          type: 1,
-          components: [{ type: 2, style: 1, label: "فتح تكت", custom_id: "vex_ticket", emoji: { name: "🎫" } }]
-        }]
-      });
-    }
-
-    if (commandName === "userinfo") {
-      const user = interaction.options.getUser("member") || interaction.user;
-      const target = await guild.members.fetch(user.id).catch(() => null);
-      return interaction.reply({
+    if (name === "serverinfo") {
+      return reply({
         embeds: [new EmbedBuilder()
-          .setTitle(`معلومات ${user.username}`)
-          .setThumbnail(user.displayAvatarURL())
+          .setTitle(guild.name)
+          .setThumbnail(guild.iconURL())
           .addFields(
-            { name: "ID", value: user.id },
-            { name: "تاريخ إنشاء الحساب", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>` },
-            { name: "تاريخ دخول السيرفر", value: target ? `<t:${Math.floor(target.joinedTimestamp / 1000)}:D>` : "غير متوفر" }
+            { name: "الأعضاء", value: String(guild.memberCount), inline: true },
+            { name: "معرّف السيرفر", value: guild.id, inline: true }
           )
           .setColor(0x5865F2)]
       });
     }
 
+    if (name === "userinfo") {
+      const user = i.options.getUser("member") || i.user;
+      const member = await guild.members.fetch(user.id).catch(() => null);
+      return reply({
+        embeds: [new EmbedBuilder()
+          .setTitle(`معلومات ${user.username}`)
+          .setThumbnail(user.displayAvatarURL())
+          .addFields(
+            { name: "ID", value: user.id },
+            { name: "إنشاء الحساب", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>` },
+            { name: "دخول السيرفر", value: member?.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>` : "غير متوفر" }
+          ).setColor(0x5865F2)]
+      });
+    }
+
+    const shortcutAdmin = ["shortcut-create", "shortcut-delete", "shortcuts"];
     const adminCommands = [
-      "warn", "warnings", "kick", "ban", "unban", "timeout", "untimeout",
-      "clear", "lock", "unlock", "slowmode", "announce"
+      "warn", "warnings", "kick", "ban", "unban", "timeout",
+      "untimeout", "clear", "lock", "unlock", "slowmode",
+      "announce", "ticket-setup"
     ];
 
-    if (!adminCommands.includes(commandName)) return;
-    if (!isAdmin(interaction)) {
-      return interaction.reply({ content: "❌ هذا الأمر يتطلب صلاحية Administrator.", ephemeral: true });
+    if (shortcutAdmin.includes(name)) {
+      if (!admin(i)) return reply("❌ هذا الأمر للإدارة فقط.");
+
+      if (name === "shortcuts") {
+        const list = Object.keys(shortcuts);
+        return reply(list.length ? list.map(n => `/${n}`).join("\n") : "لا توجد اختصارات.");
+      }
+
+      const shortcutName = i.options.getString("name").toLowerCase();
+
+      if (name === "shortcut-create") {
+        const message = i.options.getString("message");
+
+        if (!/^[a-z0-9_-]{1,32}$/.test(shortcutName))
+          return reply("❌ الاسم يجب أن يكون إنجليزيًا صغيرًا أو أرقامًا أو _ أو -.");
+
+        if (commands.some(c => c.name === shortcutName))
+          return reply("❌ هذا الاسم مستخدم لأمر أساسي.");
+
+        if (Object.hasOwn(shortcuts, shortcutName))
+          return reply("❌ الاختصار موجود مسبقًا.");
+
+        shortcuts[shortcutName] = message.slice(0, 2000);
+
+        try {
+          await saveShortcuts();
+          await registerCommands();
+          return reply(`✅ تم إنشاء /${shortcutName}. حدّث قائمة الأوامر إذا لم يظهر فورًا.`);
+        } catch (e) {
+          delete shortcuts[shortcutName];
+          console.error(e);
+          return reply("❌ فشل حفظ الاختصار. تحقق من صلاحية الكتابة في GitHub.");
+        }
+      }
+
+      if (!Object.hasOwn(shortcuts, shortcutName))
+        return reply("❌ هذا الاختصار غير موجود.");
+
+      const previous = shortcuts[shortcutName];
+      delete shortcuts[shortcutName];
+
+      try {
+        await saveShortcuts();
+        await registerCommands();
+        return reply(`✅ تم حذف /${shortcutName}.`);
+      } catch (e) {
+        shortcuts[shortcutName] = previous;
+        console.error(e);
+        return reply("❌ تعذر حذف الاختصار.");
+      }
     }
 
-    if (commandName === "warn") {
-      const user = interaction.options.getUser("member");
-      const reason = interaction.options.getString("reason");
+    if (name === "ticket-setup") {
+      if (!admin(i)) return reply("❌ للإدارة فقط.");
+
+      await i.channel.send({
+        embeds: [new EmbedBuilder()
+          .setTitle("🎫 الدعم الفني | XR")
+          .setDescription("اضغط الزر لفتح تكت خاص مع الإدارة.")
+          .setColor(0x5865F2)],
+        components: [{
+          type: 1,
+          components: [{
+            type: 2, style: 1,
+            label: "فتح تكت",
+            custom_id: "vex_ticket",
+            emoji: { name: "🎫" }
+          }]
+        }]
+      });
+      return reply("✅ تم نشر لوحة التكت في هذا الروم.");
+    }
+
+    if (!adminCommands.includes(name)) return reply("❌ أمر غير معروف.");
+    if (!admin(i)) return reply("❌ تحتاج صلاحية Administrator.");
+
+    if (name === "warn") {
+      const user = i.options.getUser("member");
+      const reason = i.options.getString("reason");
       const list = warnings.get(user.id) || [];
-      list.push({ reason, by: interaction.user.tag, at: Date.now() });
+      list.push({ reason, by: i.user.tag });
       warnings.set(user.id, list);
-      await logAction(guild, `${user.tag} تلقى تحذيرًا: ${reason}`);
-      return interaction.reply(`⚠️ تم تحذير ${user}. السبب: ${reason}`);
+      await log(guild, `⚠️ تحذير ${user.tag}: ${reason}`);
+      return reply(`⚠️ تم تحذير ${user}. السبب: ${reason}`);
     }
 
-    if (commandName === "warnings") {
-      const user = interaction.options.getUser("member");
+    if (name === "warnings") {
+      const user = i.options.getUser("member");
       const list = warnings.get(user.id) || [];
-      return interaction.reply({
-        content: list.length
-          ? `⚠️ تحذيرات ${user.tag}:\n${list.map((w, i) => `${i + 1}. ${w.reason} — ${w.by}`).join("\n")}`
-          : `✅ لا توجد تحذيرات محفوظة لـ ${user.tag}.`,
-        ephemeral: true
-      });
+      return reply(list.length
+        ? list.map((w, n) => `${n + 1}. ${w.reason} — ${w.by}`).join("\n")
+        : "لا توجد تحذيرات محفوظة.");
     }
 
-    if (commandName === "kick" || commandName === "ban" || commandName === "timeout" || commandName === "untimeout") {
-      const user = interaction.options.getUser("member");
+    if (name === "announce") {
+      const channel = i.options.getChannel("channel") || i.channel;
+      if (!channel.isTextBased()) return reply("❌ اختر رومًا نصيًا.");
+      await channel.send(`📢 **إعلان XR**\n${i.options.getString("message")}`);
+      return reply("✅ تم إرسال الإعلان.");
+    }
+
+    if (["kick", "ban", "timeout", "untimeout"].includes(name)) {
+      const user = i.options.getUser("member");
       const target = await guild.members.fetch(user.id).catch(() => null);
-      if (!target) return interaction.reply({ content: "❌ لم أجد العضو في السيرفر.", ephemeral: true });
-      if (user.id === guild.ownerId || user.id === interaction.user.id) {
-        return interaction.reply({ content: "❌ لا يمكنك تنفيذ هذا الإجراء على هذا العضو.", ephemeral: true });
-      }
-      if (target.roles.highest.position >= guild.members.me.roles.highest.position) {
-        return interaction.reply({ content: "❌ يجب أن تكون أعلى رتبة البوت أعلى من رتبة العضو المستهدف.", ephemeral: true });
-      }
+      if (!target) return reply("❌ العضو غير موجود في السيرفر.");
+      if (user.id === guild.ownerId || user.id === i.user.id)
+        return reply("❌ لا يمكن تنفيذ هذا الإجراء على هذا العضو.");
+      if (target.roles.highest.position >= guild.members.me.roles.highest.position)
+        return reply("❌ رتبة البوت يجب أن تكون أعلى من رتبة العضو.");
 
-      const reason = interaction.options.getString("reason") || `بواسطة ${interaction.user.tag}`;
+      const reason = i.options.getString("reason") || `بواسطة ${i.user.tag}`;
 
-      if (commandName === "kick") await target.kick(reason);
-      if (commandName === "ban") await target.ban({ reason });
-      if (commandName === "timeout") {
-        const minutes = interaction.options.getInteger("minutes");
-        await target.timeout(minutes * 60 * 1000, reason);
-        await logAction(guild, `Timeout: ${user.tag} لمدة ${minutes} دقيقة.`);
-        return interaction.reply(`⏳ تم إعطاء ${user} تايم أوت لمدة ${minutes} دقيقة.`);
+      if (name === "kick") await target.kick(reason);
+      if (name === "ban") await target.ban({ reason });
+      if (name === "timeout") {
+        const minutes = i.options.getInteger("minutes");
+        await target.timeout(minutes * 60000, reason);
+        return reply(`⏳ تم إعطاء ${user} تايم أوت لمدة ${minutes} دقيقة.`);
       }
-      if (commandName === "untimeout") await target.timeout(null, `إزالة التايم أوت بواسطة ${interaction.user.tag}`);
+      if (name === "untimeout") await target.timeout(null, reason);
 
-      await logAction(guild, `${commandName}: ${user.tag}`);
-      return interaction.reply(`✅ تم تنفيذ الأمر **/${commandName}** على ${user}.`);
+      await log(guild, `تم تنفيذ /${name} على ${user.tag}`);
+      return reply(`✅ تم تنفيذ /${name} على ${user}.`);
     }
 
-    if (commandName === "unban") {
-      const id = interaction.options.getString("userid");
-      await guild.members.unban(id);
-      await logAction(guild, `تم فك الحظر عن المستخدم ${id}`);
-      return interaction.reply(`✅ تم فك الحظر عن المستخدم \`${id}\`.`);
+    if (name === "unban") {
+      await guild.bans.remove(i.options.getString("userid"));
+      return reply("✅ تم فك الحظر.");
     }
 
-    if (commandName === "clear") {
-      const amount = interaction.options.getInteger("amount");
-      if (!interaction.channel?.bulkDelete) {
-        return interaction.reply({ content: "❌ هذا الأمر يعمل داخل رومات النصوص فقط.", ephemeral: true });
-      }
-      const deleted = await interaction.channel.bulkDelete(amount, true);
-      return interaction.reply({ content: `🧹 تم حذف ${deleted.size} رسالة.`, ephemeral: true });
+    if (name === "clear") {
+      const amount = i.options.getInteger("amount");
+      const deleted = await i.channel.bulkDelete(amount, true);
+      return reply(`🧹 تم حذف ${deleted.size} رسالة.`);
     }
 
-    if (commandName === "lock" || commandName === "unlock") {
-      const locked = commandName === "lock";
-      await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: !locked
+    if (name === "lock" || name === "unlock") {
+      await i.channel.permissionOverwrites.edit(guild.roles.everyone, {
+        SendMessages: name === "unlock"
       });
-      return interaction.reply(locked ? "🔒 تم قفل الروم." : "🔓 تم فتح الروم.");
+      return reply(name === "lock" ? "🔒 تم قفل الروم." : "🔓 تم فتح الروم.");
     }
 
-    if (commandName === "slowmode") {
-      const seconds = interaction.options.getInteger("seconds");
-      await interaction.channel.setRateLimitPerUser(seconds);
-      return interaction.reply(`✅ مدة بطء المحادثة الآن ${seconds} ثانية.`);
-    }
-
-    if (commandName === "announce") {
-      const message = interaction.options.getString("message");
-      const channel = interaction.options.getChannel("channel") || interaction.channel;
-      await channel.send({ content: `📢 **إعلان XR**\n${message}` });
-      return interaction.reply({ content: "✅ تم إرسال الإعلان.", ephemeral: true });
+    if (name === "slowmode") {
+      const seconds = i.options.getInteger("seconds");
+      await i.channel.setRateLimitPerUser(seconds);
+      return reply(`✅ تم ضبط Slowmode على ${seconds} ثانية.`);
     }
   } catch (error) {
     console.error("VEX Guard error:", error);
-    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "❌ حدث خطأ. راجع سجلات GitHub Actions لمعرفة السبب.", ephemeral: true }).catch(() => {});
+
+    if (i.isRepliable()) {
+      try {
+        if (i.deferred || i.replied) {
+          await i.editReply("❌ حدث خطأ. راجع سجلات GitHub Actions.");
+        } else {
+          await i.reply({
+            content: "❌ حدث خطأ. راجع سجلات GitHub Actions.",
+            ephemeral: true
+          });
+        }
+      } catch (replyError) {
+        console.error("Interaction response error:", replyError.code || replyError.message);
+      }
     }
   }
 });
+
+client.on("error", error => console.error("Discord client error:", error));
+process.on("unhandledRejection", error => console.error("Unhandled rejection:", error));
 
 client.login(TOKEN);
