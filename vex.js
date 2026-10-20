@@ -22,7 +22,6 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates
   ]
 });
@@ -140,7 +139,7 @@ add("servericon", "عرض صورة السيرفر");
 add("serverroles", "عرض عدد الرتب");
 add("channels", "عدد قنوات السيرفر");
 
-// 31–40: حماية وإشراف
+// 31–40: الحماية والإشراف
 add("purgeuser", "مسح رسائل عضو من آخر 100 رسالة", target, manageMessages);
 add("deafen", "كتم عضو صوتيًا", target, moderate);
 add("undeafen", "إلغاء الكتم الصوتي", target, moderate);
@@ -162,7 +161,7 @@ add("choose", "اختيار عشوائي بين خيارين", [
   { name: "first", description: "الخيار الأول" },
   { name: "second", description: "الخيار الثاني" }
 ]);
-add("8ball", "اسأل الكرة السحرية", [{
+add("eightball", "اسأل الكرة السحرية", [{
   name: "question",
   description: "سؤالك"
 }]);
@@ -179,15 +178,13 @@ add("remind", "تذكير برسالة داخل السيرفر", [{
 }]);
 add("support", "معلومات الدعم");
 
-console.log("1️⃣ بدأ تشغيل VEX Guard");
-console.log("2️⃣ تجهيز الأوامر...");
-console.log(`📋 عدد الأوامر: ${commands.length}`);
+const rest = new REST({
+  version: "10",
+  timeout: 120000
+}).setToken(TOKEN);
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
-
-// تسجيل عالمي: لا نستخدم GUILD_ID
 async function registerCommands() {
-  console.log(`3️⃣ جاري تسجيل ${commands.length} أمرًا عالميًا في Discord...`);
+  console.log(`3️⃣ جاري تسجيل ${commands.length} أمرًا عالميًا...`);
 
   const route = Routes.applicationCommands(CLIENT_ID);
   let timer;
@@ -198,20 +195,19 @@ async function registerCommands() {
     });
 
     const timeout = new Promise((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error("انتهت مهلة تسجيل الأوامر بعد 30 ثانية.")),
-        30000
-      );
+      timer = setTimeout(() => {
+        reject(new Error("انتهت مهلة تسجيل الأوامر بعد دقيقتين."));
+      }, 120000);
     });
 
     const result = await Promise.race([request, timeout]);
     clearTimeout(timer);
 
-    console.log(`✅ تم تسجيل ${result.length} أمرًا عالميًا بنجاح.`);
+    console.log(`✅ تم تسجيل ${result.length} أمرًا عالميًا.`);
   } catch (error) {
     clearTimeout(timer);
     console.error("❌ فشل تسجيل الأوامر:");
-    console.error(error.message);
+    console.error(error.stack || error.message);
 
     if (error.status) console.error("HTTP status:", error.status);
     if (error.code) console.error("Error code:", error.code);
@@ -229,21 +225,21 @@ client.on("interactionCreate", async interaction => {
 
   const { commandName, guild, member } = interaction;
 
-  try {
-    const reply = async message => {
-      if (interaction.deferred || interaction.replied) {
-        return interaction.followUp({
-          content: message,
-          ephemeral: true
-        });
-      }
-
-      return interaction.reply({
+  const reply = async message => {
+    if (interaction.deferred || interaction.replied) {
+      return interaction.followUp({
         content: message,
         ephemeral: true
       });
-    };
+    }
 
+    return interaction.reply({
+      content: message,
+      ephemeral: true
+    });
+  };
+
+  try {
     if (!guild) {
       return reply("❌ هذا الأمر يعمل داخل السيرفرات فقط.");
     }
@@ -285,10 +281,7 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (commandName === "servericon") {
-      return interaction.reply({
-        content: guild.iconURL({ size: 1024 }) || "لا توجد صورة للسيرفر.",
-        ephemeral: true
-      });
+      return reply(guild.iconURL({ size: 1024 }) || "لا توجد صورة للسيرفر.");
     }
 
     if (commandName === "channels") {
@@ -303,8 +296,9 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (commandName === "botlist") {
-      const bots = guild.members.cache.filter(m => m.user.bot);
-      return reply(`🤖 عدد البوتات في الذاكرة الحالية: ${bots.size}`);
+      const members = await guild.members.fetch();
+      const bots = members.filter(m => m.user.bot);
+      return reply(`🤖 عدد البوتات: ${bots.size}`);
     }
 
     if (commandName === "checkperms") {
@@ -312,14 +306,11 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (commandName === "userinfo" || commandName === "avatar") {
-      const input = interaction.options.getString("user").replace(/[<@!>]/g, "");
-      const user = await client.users.fetch(input);
+      const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const user = await client.users.fetch(id);
 
       if (commandName === "avatar") {
-        return interaction.reply({
-          content: user.displayAvatarURL({ size: 1024 }),
-          ephemeral: true
-        });
+        return reply(user.displayAvatarURL({ size: 1024 }));
       }
 
       return reply(
@@ -375,9 +366,7 @@ client.on("interactionCreate", async interaction => {
       await interaction.deferReply({ ephemeral: true });
       const deleted = await interaction.channel.bulkDelete(amount, true);
 
-      return interaction.editReply(
-        `🧹 تم حذف ${deleted.size} رسالة. الرسائل الأقدم من 14 يومًا لا تُحذف بهذه الطريقة.`
-      );
+      return interaction.editReply(`🧹 تم حذف ${deleted.size} رسالة.`);
     }
 
     if (commandName === "purgeuser") {
@@ -401,7 +390,6 @@ client.on("interactionCreate", async interaction => {
       }
 
       const targetMember = await guild.members.fetch(id).catch(() => null);
-
       if (!targetMember) return reply("❌ لم أجد العضو.");
 
       if (targetMember.id === interaction.user.id) {
@@ -420,7 +408,7 @@ client.on("interactionCreate", async interaction => {
         const minutes = Number(interaction.options.getString("minutes"));
 
         if (!Number.isInteger(minutes) || minutes < 1 || minutes > 40320) {
-          return reply("❌ المدة يجب أن تكون من دقيقة إلى 40320 دقيقة.");
+          return reply("❌ المدة يجب أن تكون من 1 إلى 40320 دقيقة.");
         }
 
         await targetMember.timeout(minutes * 60000, why);
@@ -428,7 +416,7 @@ client.on("interactionCreate", async interaction => {
 
       if (commandName === "warn") {
         return reply(
-          `⚠️ تحذير لـ ${targetMember.user.tag}\nالسبب: ${why}\nملاحظة: هذا الإصدار لا يحفظ التحذيرات في قاعدة بيانات.`
+          `⚠️ تحذير لـ ${targetMember.user.tag}\nالسبب: ${why}\nهذا التحذير غير محفوظ في قاعدة بيانات.`
         );
       }
 
@@ -466,8 +454,9 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (commandName === "announce" || commandName === "say") {
-      const message = interaction.options.getString("message");
-      await interaction.channel.send({ content: message });
+      await interaction.channel.send(
+        interaction.options.getString("message")
+      );
       return reply("✅ تم إرسال الرسالة.");
     }
 
@@ -482,7 +471,6 @@ client.on("interactionCreate", async interaction => {
 
     if (commandName === "poll") {
       const question = interaction.options.getString("question");
-
       const poll = await interaction.channel.send(
         `📊 **${question}**\n👍 = نعم\n👎 = لا`
       );
@@ -494,9 +482,7 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (commandName === "report") {
-      return reply(
-        "📩 تم استلام البلاغ محليًا. ربطه بروم الإدارة يحتاج إعداد REPORT_CHANNEL_ID."
-      );
+      return reply("📩 استلمت البلاغ. ربطه بروم الإدارة يحتاج إعدادًا إضافيًا.");
     }
 
     if (commandName === "coinflip") {
@@ -515,7 +501,7 @@ client.on("interactionCreate", async interaction => {
       );
     }
 
-    if (commandName === "8ball") {
+    if (commandName === "eightball") {
       const answers = [
         "نعم بالتأكيد!",
         "لا أعتقد ذلك.",
@@ -549,19 +535,14 @@ client.on("interactionCreate", async interaction => {
       const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
       const m = await guild.members.fetch(id);
 
-      if (!m.voice.channel) {
-        return reply("❌ العضو ليس في روم صوتي.");
-      }
+      if (!m.voice.channel) return reply("❌ العضو ليس في روم صوتي.");
 
       if (commandName === "deafen") await m.voice.setDeaf(true);
       if (commandName === "undeafen") await m.voice.setDeaf(false);
       if (commandName === "disconnect") await m.voice.disconnect();
 
       if (commandName === "move") {
-        if (!member.voice.channel) {
-          return reply("❌ ادخل رومًا صوتيًا أولًا.");
-        }
-
+        if (!member.voice.channel) return reply("❌ ادخل رومًا صوتيًا أولًا.");
         await m.voice.setChannel(member.voice.channel);
       }
 
@@ -569,18 +550,14 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (commandName === "remind") {
-      return reply(
-        "⏰ تم تسجيل طلب التذكير، لكن التذكير التلقائي يحتاج إضافة نظام تخزين ومؤقتات."
-      );
+      return reply("⏰ التذكير التلقائي يحتاج نظام تخزين ومؤقتات إضافيًا.");
     }
 
-    return reply(
-      "⚙️ هذا الأمر مسجل، لكن وظيفته تحتاج استكمالًا في هذا الإصدار."
-    );
+    return reply("⚙️ هذا الأمر مسجل لكن وظيفته تحتاج استكمالًا.");
   } catch (error) {
     console.error(`خطأ في /${commandName}:`, error);
 
-    const message = "❌ حدث خطأ. تأكد من صلاحيات البوت وترتيب الرتب.";
+    const message = "❌ حدث خطأ. تحقق من صلاحيات البوت وترتيب الرتب.";
 
     if (interaction.deferred || interaction.replied) {
       await interaction.followUp({
@@ -597,16 +574,22 @@ client.on("interactionCreate", async interaction => {
 });
 
 async function main() {
+  console.log("1️⃣ بدأ تشغيل VEX Guard");
+  console.log("2️⃣ تجهيز الأوامر...");
+  console.log(`📋 عدد الأوامر: ${commands.length}`);
+
   try {
-    console.log("1️⃣ بدأ تشغيل VEX Guard");
-    console.log("2️⃣ تجهيز الأوامر...");
-    console.log(`📋 عدد الأوامر: ${commands.length}`);
-
     await registerCommands();
+  } catch (error) {
+    console.error("⚠️ لم يكتمل تسجيل الأوامر. أوقف التشغيل لتجنب حالة غير واضحة.");
+    process.exitCode = 1;
+    return;
+  }
 
+  try {
     await client.login(TOKEN);
   } catch (error) {
-    console.error("❌ تعذّر تشغيل البوت:", error.message);
+    console.error("❌ فشل اتصال البوت:", error.message);
     process.exitCode = 1;
   }
 }
