@@ -1,87 +1,184 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits } = require("discord.js");
 
-const token = process.env.DISCORD_TOKEN;
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  PermissionFlagsBits
+} = require("discord.js");
 
-if (!token) {
-  console.error("ERROR: DISCORD_TOKEN is missing. Add it in GitHub repository Secrets.");
+const TOKEN = process.env.DISCORD_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+
+if (!TOKEN || !CLIENT_ID) {
+  console.error("❌ أضف DISCORD_TOKEN و CLIENT_ID في GitHub Secrets.");
   process.exit(1);
 }
 
+const commands = [
+  new SlashCommandBuilder()
+    .setName("مساعدة")
+    .setDescription("عرض أوامر VEX Guard"),
+
+  new SlashCommandBuilder()
+    .setName("تحذير")
+    .setDescription("إرسال تحذير لعضو")
+    .addUserOption(o =>
+      o.setName("العضو").setDescription("العضو المطلوب").setRequired(true))
+    .addStringOption(o =>
+      o.setName("السبب").setDescription("سبب التحذير").setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+
+  new SlashCommandBuilder()
+    .setName("طرد")
+    .setDescription("طرد عضو من السيرفر")
+    .addUserOption(o =>
+      o.setName("العضو").setDescription("العضو المطلوب").setRequired(true))
+    .addStringOption(o =>
+      o.setName("السبب").setDescription("سبب الطرد").setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+
+  new SlashCommandBuilder()
+    .setName("حظر")
+    .setDescription("حظر عضو من السيرفر")
+    .addUserOption(o =>
+      o.setName("العضو").setDescription("العضو المطلوب").setRequired(true))
+    .addStringOption(o =>
+      o.setName("السبب").setDescription("سبب الحظر").setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+
+  new SlashCommandBuilder()
+    .setName("مهلة")
+    .setDescription("إسكات عضو لمدة 10 دقائق")
+    .addUserOption(o =>
+      o.setName("العضو").setDescription("العضو المطلوب").setRequired(true))
+    .addStringOption(o =>
+      o.setName("السبب").setDescription("سبب المهلة").setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+].map(command => command.toJSON());
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
+
+async function registerCommands() {
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+  await rest.put(
+    Routes.applicationCommands(CLIENT_ID),
+    { body: commands }
+  );
+
+  console.log("✅ تم تسجيل أوامر VEX Guard.");
+}
 
 client.once("ready", () => {
-  console.log(`VEX Guard is online as ${client.user.tag}`);
+  console.log(`🛡️ VEX Guard متصل باسم ${client.user.tag}`);
 });
 
-client.on("messageCreate", async (message) => {
-  if (message.author.bot || !message.guild) return;
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-  const parts = message.content.trim().split(/\s+/);
-  const command = (parts[0] || "").toLowerCase();
+  const command = interaction.commandName;
 
-  if (command === "!help") {
-    return message.reply(
-      "**VEX Guard Commands**\n" +
-      "`!help` — Show commands\n" +
-      "`!warn @member [reason]` — Record a warning message\n" +
-      "`!kick @member [reason]` — Kick a member\n" +
-      "`!ban @member [reason]` — Ban a member"
-    );
+  if (command === "مساعدة") {
+    return interaction.reply({
+      content:
+        "🛡️ **أوامر VEX Guard**\n\n" +
+        " `/مساعدة` — عرض الأوامر\n" +
+        " `/تحذير` — تحذير عضو\n" +
+        " `/طرد` — طرد عضو\n" +
+        " `/حظر` — حظر عضو\n" +
+        " `/مهلة` — إسكات عضو لمدة 10 دقائق",
+      ephemeral: true
+    });
   }
 
-  if (command === "!warn") {
-    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      return message.reply("You do not have permission to use this command.");
-    }
-    const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage: `!warn @member [reason]`");
-    const reason = parts.slice(2).join(" ") || "No reason provided";
-    return message.channel.send(`⚠️ ${member.user.tag} received a warning. Reason: ${reason}`);
+  const memberUser = interaction.options.getUser("العضو");
+  const reason = interaction.options.getString("السبب") || "لم يُذكر السبب";
+  const member = await interaction.guild.members.fetch(memberUser.id).catch(() => null);
+
+  if (!member) {
+    return interaction.reply({
+      content: "❌ لم أتمكن من العثور على العضو في السيرفر.",
+      ephemeral: true
+    });
   }
 
-  if (command === "!kick") {
-    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) {
-      return message.reply("You do not have permission to use this command.");
+  if (command === "تحذير") {
+    return interaction.reply({
+      content: `⚠️ تم تسجيل تحذير للعضو ${memberUser}.\n📝 السبب: ${reason}`,
+      allowedMentions: { users: [] }
+    });
+  }
+
+  if (command === "طرد") {
+    if (!member.kickable) {
+      return interaction.reply({
+        content: "❌ لا أستطيع طرد هذا العضو. تحقق من صلاحياتي وترتيب رتبتي.",
+        ephemeral: true
+      });
     }
-    const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage: `!kick @member [reason]`");
-    if (!member.kickable) return message.reply("I cannot kick this member. Check my role position and permissions.");
-    const reason = parts.slice(2).join(" ") || "No reason provided";
+
     try {
       await member.kick(reason);
-      return message.channel.send(`👢 ${member.user.tag} was kicked. Reason: ${reason}`);
+      return interaction.reply(`👢 تم طرد **${memberUser.tag}**.\n📝 السبب: ${reason}`);
     } catch {
-      return message.reply("Kick failed. Check the bot's permissions and role position.");
+      return interaction.reply({
+        content: "❌ فشل الطرد. تحقق من صلاحيات البوت.",
+        ephemeral: true
+      });
     }
   }
 
-  if (command === "!ban") {
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-      return message.reply("You do not have permission to use this command.");
+  if (command === "حظر") {
+    if (!member.bannable) {
+      return interaction.reply({
+        content: "❌ لا أستطيع حظر هذا العضو. تحقق من صلاحياتي وترتيب رتبتي.",
+        ephemeral: true
+      });
     }
-    const member = message.mentions.members.first();
-    if (!member) return message.reply("Usage: `!ban @member [reason]`");
-    if (!member.bannable) return message.reply("I cannot ban this member. Check my role position and permissions.");
-    const reason = parts.slice(2).join(" ") || "No reason provided";
+
     try {
       await member.ban({ reason });
-      return message.channel.send(`🔨 ${member.user.tag} was banned. Reason: ${reason}`);
+      return interaction.reply(`🔨 تم حظر **${memberUser.tag}**.\n📝 السبب: ${reason}`);
     } catch {
-      return message.reply("Ban failed. Check the bot's permissions and role position.");
+      return interaction.reply({
+        content: "❌ فشل الحظر. تحقق من صلاحيات البوت.",
+        ephemeral: true
+      });
+    }
+  }
+
+  if (command === "مهلة") {
+    if (!member.moderatable) {
+      return interaction.reply({
+        content: "❌ لا أستطيع إعطاء هذا العضو مهلة. تحقق من صلاحياتي وترتيب رتبتي.",
+        ephemeral: true
+      });
+    }
+
+    try {
+      await member.timeout(10 * 60 * 1000, reason);
+      return interaction.reply(
+        `🔇 تم إسكات **${memberUser.tag}** لمدة 10 دقائق.\n📝 السبب: ${reason}`
+      );
+    } catch {
+      return interaction.reply({
+        content: "❌ فشل إعطاء المهلة. تحقق من صلاحيات البوت.",
+        ephemeral: true
+      });
     }
   }
 });
 
-client.on("error", (error) => console.error("Discord client error:", error));
-
-client.login(token).catch((error) => {
-  console.error("Failed to connect to Discord:", error.message);
-  process.exit(1);
-});
+(async () => {
+  try {
+    await registerCommands();
+    await client.login(TOKEN);
+  } catch (error) {
+    console.error("❌ خطأ في تشغيل VEX Guard:", error);
+    process.exit(1);
+  }
+})();
