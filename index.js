@@ -41,7 +41,7 @@ const commands = [
     .addUserOption(o =>
       o.setName("العضو").setDescription("العضو").setRequired(true))
     .addStringOption(o =>
-      o.setName("السبب").setDescription("السبب").setRequired(false))
+      o.setName("السبب").setDescription("السبب"))
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   new SlashCommandBuilder()
@@ -50,7 +50,7 @@ const commands = [
     .addUserOption(o =>
       o.setName("العضو").setDescription("العضو").setRequired(true))
     .addStringOption(o =>
-      o.setName("السبب").setDescription("السبب").setRequired(false))
+      o.setName("السبب").setDescription("السبب"))
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
   new SlashCommandBuilder()
@@ -59,7 +59,7 @@ const commands = [
     .addUserOption(o =>
       o.setName("العضو").setDescription("العضو").setRequired(true))
     .addStringOption(o =>
-      o.setName("السبب").setDescription("السبب").setRequired(false))
+      o.setName("السبب").setDescription("السبب"))
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
   new SlashCommandBuilder()
@@ -68,14 +68,14 @@ const commands = [
     .addUserOption(o =>
       o.setName("العضو").setDescription("العضو").setRequired(true))
     .addStringOption(o =>
-      o.setName("السبب").setDescription("السبب").setRequired(false))
+      o.setName("السبب").setDescription("السبب"))
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   new SlashCommandBuilder()
     .setName("إعداد-التكت")
-    .setDescription("إنشاء لوحة التكت في هذه القناة")
+    .setDescription("نشر لوحة التكت")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-].map(command => command.toJSON());
+].map(c => c.toJSON());
 
 const client = new Client({
   intents: [
@@ -88,8 +88,6 @@ const client = new Client({
 
 const messageHistory = new Map();
 const violations = new Map();
-
-// ---------- أدوات مساعدة ----------
 
 function isStaff(member) {
   return member.permissions.has(PermissionFlagsBits.ManageChannels) ||
@@ -104,10 +102,7 @@ function getTicketInfo(channel) {
 
   if (!owner || !type) return null;
 
-  return {
-    ownerId: owner[1],
-    type: type[1]
-  };
+  return { ownerId: owner[1], type: type[1] };
 }
 
 function ticketPanel() {
@@ -115,28 +110,25 @@ function ticketPanel() {
     .setColor(0x7C3AED)
     .setTitle("🎫 VEX GUARD | مركز التذاكر")
     .setDescription(
-      "مرحبًا بك في مركز الدعم الرسمي لسيرفر **XR**.\n\n" +
+      "مرحبًا بك في مركز الدعم الرسمي لسيرفر **XR**!\n\n" +
       "اختر نوع التكت المناسب من الأزرار بالأسفل.\n" +
-      "سيتم إنشاء قناة خاصة بينك وبين الإدارة."
+      "ستُنشأ قناة خاصة بك وبالإدارة."
     )
     .addFields(
       {
         name: "💬 الدعم والمساعدة",
-        value: "للاستفسارات والمشاكل وطلب المساعدة.",
-        inline: false
+        value: "للاستفسارات والمشاكل وطلب المساعدة."
       },
       {
         name: "🛒 الشراء والخدمات",
-        value: "للطلبات والأسعار والاستفسار عن الخدمات.",
-        inline: false
+        value: "للطلبات والأسعار والاستفسار عن الخدمات."
       },
       {
         name: "🔒 الخصوصية",
-        value: "التكت خاص بصاحبه والإدارة المخوّلة فقط.",
-        inline: false
+        value: "التكت خاص بصاحبه والإدارة المخوّلة فقط."
       }
     )
-    .setFooter({ text: "XR • VEX Guard Security System" })
+    .setFooter({ text: "XR • VEX Guard" })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
@@ -166,14 +158,49 @@ function closeButton() {
   );
 }
 
-// ---------- جاهزية البوت ----------
+// تسجيل الأوامر دون حذف Entry Point أو الأوامر الأخرى
+async function registerCommands() {
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+  const route = Routes.applicationCommands(CLIENT_ID);
+
+  const existingCommands = await rest.get(route);
+
+  for (const command of commands) {
+    const existing = existingCommands.find(
+      item => item.name === command.name && item.type === 1
+    );
+
+    try {
+      if (existing) {
+        await rest.patch(
+          Routes.applicationCommand(CLIENT_ID, existing.id),
+          { body: command }
+        );
+
+        console.log(`🔄 تم تحديث: ${command.name}`);
+      } else {
+        const created = await rest.post(route, { body: command });
+        existingCommands.push(created);
+
+        console.log(`✅ تم تسجيل: ${command.name}`);
+      }
+    } catch (error) {
+      console.error(
+        `❌ فشل تسجيل ${command.name}:`,
+        error.message
+      );
+      throw error;
+    }
+  }
+
+  console.log("✅ اكتمل تسجيل أوامر VEX Guard دون حذف الأوامر الأخرى.");
+}
 
 client.once("clientReady", () => {
   console.log(`🛡️ VEX Guard يعمل باسم ${client.user.tag}`);
 });
 
-// ---------- حماية السبام والروابط ----------
-
+// حماية السبام والروابط
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot || !message.member) return;
 
@@ -193,13 +220,11 @@ client.on("messageCreate", async message => {
 
   if (times.length >= SPAM_LIMIT) {
     try {
-      const recentMessages = await message.channel.messages.fetch({
-        limit: 10
-      });
+      const recent = await message.channel.messages.fetch({ limit: 10 });
 
-      const userMessages = recentMessages.filter(
+      const userMessages = recent.filter(
         m => m.author.id === message.author.id &&
-        now - m.createdTimestamp < SPAM_WINDOW
+          now - m.createdTimestamp < SPAM_WINDOW
       );
 
       if (userMessages.size >= SPAM_LIMIT) {
@@ -246,7 +271,7 @@ client.on("messageCreate", async message => {
           );
         } else {
           await message.channel.send(
-            `⚠️ ${message.author} الروابط ممنوعة، ولا أملك صلاحية إعطاء المهلة.`
+            `⚠️ ${message.author} الروابط ممنوعة.`
           );
         }
       } else {
@@ -263,8 +288,7 @@ client.on("messageCreate", async message => {
   }
 });
 
-// ---------- معالجة الأزرار ----------
-
+// الأوامر والأزرار
 client.on("interactionCreate", async interaction => {
   try {
     // أزرار التكت
@@ -281,15 +305,17 @@ client.on("interactionCreate", async interaction => {
 
         const guild = interaction.guild;
         if (!guild) {
-          return await interaction.editReply("❌ هذا الزر يعمل داخل السيرفر فقط.");
+          return await interaction.editReply(
+            "❌ هذا الزر يعمل داخل السيرفر فقط."
+          );
         }
 
         const type = id === "vex_ticket_support" ? "support" : "shop";
         const typeName = type === "support" ? "الدعم" : "الشراء";
 
-        // منع تكرار التكت من النوع نفسه
         const existing = guild.channels.cache.find(channel => {
           const info = getTicketInfo(channel);
+
           return channel.type === ChannelType.GuildText &&
             info?.ownerId === interaction.user.id &&
             info?.type === type;
@@ -304,13 +330,27 @@ client.on("interactionCreate", async interaction => {
         const botMember = guild.members.me ||
           await guild.members.fetchMe();
 
-        if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+        if (!botMember.permissions.has(
+          PermissionFlagsBits.ManageChannels
+        )) {
           return await interaction.editReply(
-            "❌ البوت يحتاج صلاحية Manage Channels لإنشاء التكت."
+            "❌ البوت يحتاج صلاحية Manage Channels."
           );
         }
 
-        // إخفاء القناة عن الجميع وإظهارها لصاحب التكت والإدارة
+        let parent;
+
+        if (TICKET_CATEGORY_ID) {
+          parent = await guild.channels.fetch(TICKET_CATEGORY_ID)
+            .catch(() => null);
+
+          if (!parent || parent.type !== ChannelType.GuildCategory) {
+            return await interaction.editReply(
+              "❌ معرّف تصنيف التكت غير صحيح. صحّح TICKET_CATEGORY_ID أو اتركه فارغًا."
+            );
+          }
+        }
+
         const overwrites = [
           {
             id: guild.roles.everyone.id,
@@ -338,7 +378,6 @@ client.on("interactionCreate", async interaction => {
           }
         ];
 
-        // السماح للرتب التي تملك صلاحيات إدارة القنوات أو الإدارة العليا
         const staffRoles = guild.roles.cache.filter(role =>
           role.id !== guild.roles.everyone.id &&
           (
@@ -356,19 +395,6 @@ client.on("interactionCreate", async interaction => {
               PermissionFlagsBits.ReadMessageHistory
             ]
           });
-        }
-
-        let parent;
-
-        if (TICKET_CATEGORY_ID) {
-          parent = await guild.channels.fetch(TICKET_CATEGORY_ID)
-            .catch(() => null);
-
-          if (!parent || parent.type !== ChannelType.GuildCategory) {
-            return await interaction.editReply(
-              "❌ معرّف تصنيف التكت غير صحيح. صحّح TICKET_CATEGORY_ID أو اتركه فارغًا."
-            );
-          }
         }
 
         const safeName = interaction.user.username
@@ -394,8 +420,8 @@ client.on("interactionCreate", async interaction => {
           .setDescription(
             `أهلًا ${interaction.user}!\n\n` +
             `تم فتح تكت **${typeName}** بنجاح.\n` +
-            "يرجى كتابة طلبك بالتفصيل وانتظار رد الإدارة.\n\n" +
-            "🔒 هذه القناة خاصة بك وبالإدارة."
+            "اكتب طلبك بالتفصيل وانتظر رد الإدارة.\n\n" +
+            "🔒 القناة خاصة بك وبالإدارة."
           )
           .addFields({
             name: "📌 تعليمات",
@@ -429,11 +455,10 @@ client.on("interactionCreate", async interaction => {
           });
         }
 
-        const allowed =
-          interaction.user.id === info.ownerId ||
-          isStaff(interaction.member);
-
-        if (!allowed) {
+        if (
+          interaction.user.id !== info.ownerId &&
+          !isStaff(interaction.member)
+        ) {
           return await interaction.reply({
             content: "❌ لا يمكنك إغلاق هذا التكت.",
             flags: MessageFlags.Ephemeral
@@ -453,7 +478,7 @@ client.on("interactionCreate", async interaction => {
         );
 
         return await interaction.reply({
-          content: "⚠️ هل أنت متأكد من إغلاق التكت؟ سيتم حذف القناة نهائيًا.",
+          content: "⚠️ هل أنت متأكد؟ سيتم حذف قناة التكت نهائيًا.",
           components: [row],
           flags: MessageFlags.Ephemeral
         });
@@ -472,11 +497,10 @@ client.on("interactionCreate", async interaction => {
           });
         }
 
-        const allowed =
-          interaction.user.id === info.ownerId ||
-          isStaff(interaction.member);
-
-        if (!allowed) {
+        if (
+          interaction.user.id !== info.ownerId &&
+          !isStaff(interaction.member)
+        ) {
           return await interaction.reply({
             content: "❌ لا يمكنك تنفيذ هذا الإجراء.",
             flags: MessageFlags.Ephemeral
@@ -495,7 +519,7 @@ client.on("interactionCreate", async interaction => {
         await interaction.deferUpdate();
         await channel.delete("إغلاق التكت بواسطة صاحبه أو الإدارة")
           .catch(error => {
-            console.error("تعذر حذف قناة التكت:", error.message);
+            console.error("تعذر حذف التكت:", error.message);
           });
 
         return;
@@ -504,7 +528,6 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    // أوامر Slash
     if (!interaction.isChatInputCommand() || !interaction.guild) return;
 
     await interaction.deferReply({
@@ -521,7 +544,7 @@ client.on("interactionCreate", async interaction => {
       await interaction.channel.send(ticketPanel());
 
       return await interaction.editReply(
-        "✅ تم نشر لوحة التكت بنجاح في هذه القناة."
+        "✅ تم نشر لوحة التكت بنجاح."
       );
     }
 
@@ -533,8 +556,8 @@ client.on("interactionCreate", async interaction => {
         "`/طرد` — طرد عضو\n" +
         "`/حظر` — حظر عضو\n" +
         "`/مهلة` — إسكات عضو 10 دقائق\n" +
-        "`/إعداد-التكت` — إنشاء لوحة التكت\n\n" +
-        "🎫 دعم وشراء\n" +
+        "`/إعداد-التكت` — نشر لوحة التكت\n\n" +
+        "🎫 نظام تكت للدعم والشراء\n" +
         "🚨 حماية تلقائية من السبام والروابط"
       );
     }
@@ -563,17 +586,16 @@ client.on("interactionCreate", async interaction => {
       return await interaction.editReply("❌ لم أجد العضو في السيرفر.");
     }
 
-    if (
-      member.id === interaction.user.id ||
-      member.id === client.user.id
-    ) {
+    if (member.id === interaction.user.id || member.id === client.user.id) {
       return await interaction.editReply(
         "❌ لا يمكنك تطبيق هذا الأمر على نفسك أو على البوت."
       );
     }
 
     if (command === "طرد") {
-      if (!interaction.memberPermissions.has(PermissionFlagsBits.KickMembers)) {
+      if (!interaction.memberPermissions.has(
+        PermissionFlagsBits.KickMembers
+      )) {
         return await interaction.editReply("❌ لا تملك صلاحية الطرد.");
       }
 
@@ -591,7 +613,9 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (command === "حظر") {
-      if (!interaction.memberPermissions.has(PermissionFlagsBits.BanMembers)) {
+      if (!interaction.memberPermissions.has(
+        PermissionFlagsBits.BanMembers
+      )) {
         return await interaction.editReply("❌ لا تملك صلاحية الحظر.");
       }
 
@@ -612,7 +636,7 @@ client.on("interactionCreate", async interaction => {
       if (!interaction.memberPermissions.has(
         PermissionFlagsBits.ModerateMembers
       )) {
-        return await interaction.editReply("❌ لا تملك صلاحية إعطاء المهلة.");
+        return await interaction.editReply("❌ لا تملك صلاحية المهلة.");
       }
 
       if (!member.moderatable) {
@@ -627,7 +651,6 @@ client.on("interactionCreate", async interaction => {
         `🔇 تم إسكات **${user.tag}** لمدة 10 دقائق.\n📝 السبب: ${reason}`
       );
     }
-
   } catch (error) {
     console.error("خطأ في التفاعل:", error);
 
@@ -635,9 +658,7 @@ client.on("interactionCreate", async interaction => {
       await interaction.editReply({
         content: "❌ حدث خطأ. تحقق من صلاحيات البوت وإعدادات القنوات."
       }).catch(() => {});
-    } else if (interaction.replied) {
-      // لا نحاول الرد على التفاعل مرتين
-    } else {
+    } else if (!interaction.replied) {
       await interaction.reply({
         content: "❌ حدث خطأ أثناء تنفيذ العملية.",
         flags: MessageFlags.Ephemeral
@@ -645,19 +666,6 @@ client.on("interactionCreate", async interaction => {
     }
   }
 });
-
-// ---------- تسجيل الأوامر ----------
-
-async function registerCommands() {
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-
-  await rest.put(
-    Routes.applicationCommands(CLIENT_ID),
-    { body: commands }
-  );
-
-  console.log("✅ تم تسجيل جميع أوامر VEX Guard.");
-}
 
 client.on("error", error => {
   console.error("خطأ في عميل Discord:", error);
@@ -672,4 +680,3 @@ client.on("error", error => {
     process.exitCode = 1;
   }
 })();
-
