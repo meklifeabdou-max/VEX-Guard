@@ -1,625 +1,289 @@
-
 const {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  PermissionFlagsBits
+  Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
+  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  PermissionFlagsBits, ChannelType
 } = require("discord.js");
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+const TICKET_CATEGORY_ID = process.env.TICKET_CATEGORY_ID || null;
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error("❌ تأكد من DISCORD_TOKEN و CLIENT_ID في GitHub Secrets");
+  console.error("❌ أضف DISCORD_TOKEN و CLIENT_ID في GitHub Secrets.");
   process.exit(1);
 }
 
 const bot = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
-const commands = [
-  ["كت","سؤال عشوائي"],
-  ["روليت","روليت جماعية بين الأعضاء"],
-  ["صراحة","سؤال صراحة"],
-  ["تحدي","تحدٍ عشوائي"],
-  ["حظ","جرّب حظك"],
-  ["نرد","ارم النرد"],
-  ["عملة","اقلب العملة"],
-  ["لغز","احصل على لغز"],
-  ["نكتة","نكتة عشوائية"],
-  ["حقيقة","حقيقة ممتعة"],
-  ["اختيار","اختيار عشوائي"],
-  ["فريق","تحدي الفرق"],
-  ["تصويت","أنشئ تصويتًا"],
-  ["رقم","رقم عشوائي"],
-  ["إيموجي","إيموجي عشوائي"],
-  ["لون","لون عشوائي"],
-  ["اسم","اسم عشوائي"],
-  ["حروف","حرف عشوائي"],
-  ["سؤال","سؤال جديد"],
-  ["مساعدة","قائمة الأوامر"],
-  ["بنق","سرعة استجابة البوت"],
-  ["بوت","معلومات البوت"],
-  ["خادم","معلومات السيرفر"],
-  ["عضو","معلومات عن عضو"],
-  ["أفاتار","صورتك الشخصية"],
-  ["أيقونة","أيقونة السيرفر"],
-  ["الأعضاء","عدد أعضاء السيرفر"],
-  ["الرتب","قائمة الرتب"],
-  ["القنوات","عدد القنوات"],
-  ["الوقت","الوقت الحالي"],
-  ["تاريخ","تاريخ اليوم"],
-  ["نصيحة","نصيحة عشوائية"],
-  ["اقتباس","اقتباس تحفيزي"],
-  ["شكر","رسالة شكر"],
-  ["ترحيب","رسالة ترحيب"],
-  ["وداع","رسالة وداع"],
-  ["تخمين","لعبة تخمين الرقم"],
-  ["حجر_ورقة","حجر ورقة مقص"],
-  ["ذاكرة","تحدي الذاكرة"],
-  ["سرعة","تحدي السرعة"],
-  ["حساب","معلومات حسابك"],
-  ["انضمام","تاريخ انضمامك"],
-  ["المالك","مالك السيرفر"],
-  ["المشرفون","تذكير بالإدارة"],
-  ["القواعد","تذكير بقوانين السيرفر"],
-  ["اقتراح","أرسل اقتراحًا"],
-  ["بلاغ","إرسال بلاغ"],
-  ["إعلان","إعلان للسيرفر"],
-  ["قفل","قفل القناة"],
-  ["فتح","فتح القناة"],
-  ["مسح","حذف الرسائل"],
-  ["بطء","تغيير وضع البطء"],
-  ["طرد","طرد عضو"],
-  ["حظر","حظر عضو"],
-  ["إلغاء_حظر","إلغاء حظر عضو"],
-  ["تحذير","تحذير عضو"],
-  ["مهلة","إسكات عضو مؤقتًا"],
-  ["إنهاء_المهلة","إلغاء مهلة عضو"],
-  ["لقب","تغيير لقب عضو"],
-  ["أضف_رتبة","إضافة رتبة"],
-  ["احذف_رتبة","حذف رتبة من عضو"],
-  ["إنشاء_قناة","إنشاء قناة"],
-  ["حذف_قناة","حذف القناة الحالية"],
-  ["موضوع","تغيير موضوع القناة"],
-  ["دعوة","إنشاء رابط دعوة"],
-  ["إحصائيات","إحصائيات السيرفر"],
-  ["عمر_الحساب","معلومات عمر حسابك"],
-  ["عمر_السيرفر","عمر السيرفر"],
-  ["قائمة_الألعاب","قائمة الألعاب"],
-  ["روليت_مساعدة","شرح الروليت"],
-  ["تحدي_جماعي","تحدٍ جماعي"],
-  ["سؤال_إضافي","سؤال إضافي"],
-  ["فزورة","فزورة جديدة"],
-  ["حساب_جمع","جمع عددين"],
-  ["نسبة","حساب نسبة مئوية"],
-  ["ترتيب","ترتيب عشوائي"],
-  ["فريق_أحمر","اختر الفريق الأحمر"],
-  ["فريق_أزرق","اختر الفريق الأزرق"],
-  ["نعم_أو_لا","إجابة نعم أو لا"],
-  ["توقع","توقع عشوائي"],
-  ["حالة","حالة البوت"],
-  ["معلوماتي","معلومات حسابك"],
-  ["رتبتي","أعلى رتبة لديك"],
-  ["عدد_الرتب","عدد الرتب"],
-  ["عدد_القنوات","عدد القنوات"],
-  ["عدد_التعزيزات","عدد التعزيزات"],
-  ["رسالة","رسالة عشوائية"],
-  ["حكمة","حكمة اليوم"],
-  ["حيوان","حيوان عشوائي"],
-  ["رياضة","تحدي رياضي"],
-  ["كرة","سؤال كرة قدم"],
-  ["ألعاب","اقتراح لعبة"],
-  ["تحدي_الأصدقاء","تحدٍ للأصدقاء"],
-  ["اختبار","اختبار عشوائي"],
-  ["فائز","اختيار فائز عشوائي"],
-  ["شعار","شعار VEX Guard"],
-  ["مساعدة_الإدارة","معلومات أوامر الإدارة"],
-  ["مساعدة_الألعاب","معلومات الألعاب"]
+const roulette = new Map();
+
+const descriptions = {
+  "كت": "احصل على سؤال عشوائي",
+  "روليت": "ابدأ روليت جماعي",
+  "صراحة": "سؤال صراحة عشوائي",
+  "تحدي": "احصل على تحدٍ",
+  "حظ": "اعرف نسبة حظك",
+  "نرد": "ارمِ النرد",
+  "عملة": "اقلب العملة",
+  "لغز": "احصل على لغز",
+  "نكتة": "احصل على نكتة",
+  "حقيقة": "معلومة عشوائية",
+  "اختيار": "اختر بين خيارين",
+  "فريق": "اختيار فريق",
+  "تصويت": "أنشئ تصويتًا",
+  "رقم": "اختر رقمًا عشوائيًا",
+  "إيموجي": "إيموجي عشوائي",
+  "لون": "لون عشوائي",
+  "اسم": "اسم عشوائي",
+  "حروف": "حرف عشوائي",
+  "سؤال": "سؤال عشوائي",
+  "مساعدة": "عرض قائمة الأوامر",
+  "بنق": "سرعة استجابة البوت",
+  "بوت": "معلومات البوت",
+  "خادم": "معلومات السيرفر",
+  "عضو": "معلومات عضو",
+  "أفاتار": "عرض صورة عضو",
+  "أيقونة": "عرض أيقونة السيرفر",
+  "الأعضاء": "عدد الأعضاء",
+  "الرتب": "عدد الرتب",
+  "القنوات": "عدد القنوات",
+  "الوقت": "الوقت الحالي",
+  "تاريخ": "التاريخ الحالي",
+  "نصيحة": "نصيحة عشوائية",
+  "اقتباس": "اقتباس عشوائي",
+  "شكر": "رسالة شكر",
+  "ترحيب": "رسالة ترحيب",
+  "وداع": "رسالة وداع",
+  "تخمين": "خمن رقمًا من 1 إلى 10",
+  "حجر_ورقة": "حجر ورقة مقص",
+  "ذاكرة": "اختبار ذاكرة",
+  "سرعة": "اختبار سرعة",
+  "حساب": "عملية حسابية",
+  "انضمام": "تاريخ انضمام عضو",
+  "المالك": "مالك السيرفر",
+  "المشرفون": "عدد المشرفين",
+  "القواعد": "تذكير بالقواعد",
+  "اقتراح": "إرسال اقتراح",
+  "بلاغ": "لوحة التذاكر",
+  "إعلان": "إرسال إعلان إداري",
+  "قفل": "قفل القناة",
+  "فتح": "فتح القناة",
+  "مسح": "حذف رسائل",
+  "بطء": "تغيير مهلة القناة",
+  "طرد": "طرد عضو",
+  "حظر": "حظر عضو",
+  "إلغاء_حظر": "إلغاء حظر باستخدام ID",
+  "تحذير": "تحذير عضو",
+  "مهلة": "إعطاء عضو مهلة",
+  "إنهاء_المهلة": "إنهاء مهلة عضو",
+  "لقب": "تغيير لقب عضو",
+  "أضف_رتبة": "إضافة رتبة لعضو",
+  "احذف_رتبة": "حذف رتبة من عضو",
+  "إنشاء_قناة": "إنشاء قناة",
+  "حذف_قناة": "حذف القناة الحالية",
+  "موضوع": "تغيير موضوع القناة",
+  "دعوة": "إنشاء رابط دعوة",
+  "إحصائيات": "إحصائيات السيرفر",
+  "عمر_الحساب": "عمر الحساب",
+  "عمر_السيرفر": "عمر السيرفر",
+  "قائمة_الألعاب": "قائمة الألعاب",
+  "روليت_مساعدة": "شرح الروليت",
+  "تحدي_جماعي": "تحدٍ جماعي",
+  "سؤال_إضافي": "سؤال إضافي",
+  "فزورة": "فزورة عشوائية",
+  "حساب_جمع": "سؤال جمع",
+  "نسبة": "نسبة عشوائية",
+  "ترتيب": "اختيار ترتيب عشوائي",
+  "فريق_أحمر": "اختيار الفريق الأحمر",
+  "فريق_أزرق": "اختيار الفريق الأزرق",
+  "نعم_أو_لا": "إجابة نعم أو لا",
+  "توقع": "توقع عشوائي",
+  "حالة": "حالة البوت",
+  "معلوماتي": "معلوماتك",
+  "رتبتي": "أعلى رتبة لديك",
+  "عدد_الرتب": "عدد الرتب",
+  "عدد_القنوات": "عدد القنوات",
+  "عدد_التعزيزات": "عدد التعزيزات",
+  "رسالة": "إرسال رسالة إدارية",
+  "حكمة": "حكمة عشوائية",
+  "حيوان": "حيوان عشوائي",
+  "رياضة": "رياضة عشوائية",
+  "كرة": "معلومة كرة قدم",
+  "ألعاب": "اقتراح لعبة",
+  "تحدي_الأصدقاء": "تحدٍ للأصدقاء",
+  "اختبار": "اختبار سريع",
+  "فائز": "اختيار فائز",
+  "شعار": "شعار نصي",
+  "مساعدة_الإدارة": "أوامر الإدارة",
+  "مساعدة_الألعاب": "أوامر الألعاب"
+};
+
+const staffOnly = [
+  "إعلان", "قفل", "فتح", "مسح", "بطء", "طرد", "حظر",
+  "إلغاء_حظر", "تحذير", "مهلة", "إنهاء_المهلة", "لقب",
+  "أضف_رتبة", "احذف_رتبة", "إنشاء_قناة", "حذف_قناة",
+  "موضوع", "رسالة"
 ];
 
-const slash = commands.map(([name, description]) =>
-  new SlashCommandBuilder()
+const commands = Object.entries(descriptions).map(([name, desc]) => {
+  const c = new SlashCommandBuilder()
     .setName(name)
-    .setDescription(description)
-);
+    .setDescription(desc);
 
-for (const name of [
-  "طرد", "حظر", "تحذير", "مهلة",
-  "إنهاء_المهلة", "لقب"
-]) {
-  slash.find(c => c.name === name)
-    .addUserOption(o =>
-      o.setName("العضو")
-        .setDescription("اختر العضو")
-        .setRequired(true)
+  if ([
+    "عضو", "أفاتار", "طرد", "حظر", "تحذير", "مهلة",
+    "إنهاء_المهلة", "لقب", "أضف_رتبة", "احذف_رتبة", "انضمام"
+  ].includes(name)) {
+    c.addUserOption(o =>
+      o.setName("العضو").setDescription("اختر العضو").setRequired(false)
     );
-}
+  }
 
-for (const name of ["تحذير", "مهلة", "لقب"]) {
-  slash.find(c => c.name === name)
-    .addStringOption(o =>
-      o.setName("السبب")
-        .setDescription("السبب أو اللقب")
-        .setRequired(false)
+  if ([
+    "تحذير", "مهلة", "لقب", "إعلان", "اقتراح",
+    "موضوع", "رسالة", "طرد", "حظر"
+  ].includes(name)) {
+    c.addStringOption(o =>
+      o.setName("النص").setDescription("النص أو السبب")
+        .setRequired(["إعلان", "اقتراح", "موضوع", "رسالة"].includes(name))
     );
-}
+  }
 
-slash.find(c => c.name === "مسح")
-  .addIntegerOption(o =>
-    o.setName("العدد")
-      .setDescription("عدد الرسائل")
-      .setMinValue(1)
-      .setMaxValue(100)
-      .setRequired(true)
-  );
+  if (name === "مسح") {
+    c.addIntegerOption(o =>
+      o.setName("العدد").setDescription("من 1 إلى 100")
+        .setMinValue(1).setMaxValue(100).setRequired(true)
+    );
+  }
+
+  if (name === "بطء") {
+    c.addIntegerOption(o =>
+      o.setName("الثواني").setDescription("من 0 إلى 21600")
+        .setMinValue(0).setMaxValue(21600).setRequired(true)
+    );
+  }
+
+  if (name === "رقم") {
+    c.addIntegerOption(o =>
+      o.setName("من").setDescription("أصغر رقم").setRequired(false)
+    ).addIntegerOption(o =>
+      o.setName("إلى").setDescription("أكبر رقم").setRequired(false)
+    );
+  }
+
+  if (name === "اختيار") {
+    c.addStringOption(o =>
+      o.setName("الخيار_الأول").setDescription("الخيار الأول").setRequired(true)
+    ).addStringOption(o =>
+      o.setName("الخيار_الثاني").setDescription("الخيار الثاني").setRequired(true)
+    );
+  }
+
+  if (name === "تصويت") {
+    c.addStringOption(o =>
+      o.setName("السؤال").setDescription("موضوع التصويت").setRequired(true)
+    );
+  }
+
+  if (name === "تخمين") {
+    c.addIntegerOption(o =>
+      o.setName("الرقم").setDescription("من 1 إلى 10")
+        .setMinValue(1).setMaxValue(10).setRequired(true)
+    );
+  }
+
+  if (name === "إنشاء_قناة") {
+    c.addStringOption(o =>
+      o.setName("الاسم").setDescription("اسم القناة").setRequired(true)
+    );
+  }
+
+  if (name === "إلغاء_حظر") {
+    c.addStringOption(o =>
+      o.setName("المعرف").setDescription("ID العضو").setRequired(true)
+    );
+  }
+
+  if (["أضف_رتبة", "احذف_رتبة"].includes(name)) {
+    c.addStringOption(o =>
+      o.setName("اسم_الرتبة").setDescription("اسم الرتبة").setRequired(true)
+    );
+  }
+
+  if (name === "فائز") {
+    c.addStringOption(o =>
+      o.setName("المشاركون").setDescription("أسماء مفصولة بفواصل").setRequired(true)
+    );
+  }
+
+  return c;
+});
+
+const embed = (title, description) =>
+  new EmbedBuilder().setColor(0x5865F2)
+    .setTitle(title).setDescription(description).setTimestamp();
+
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+const isStaff = member => member &&
+  (member.permissions.has(PermissionFlagsBits.ManageChannels) ||
+   member.permissions.has(PermissionFlagsBits.Administrator));
 
 const questions = [
-  "ما أكثر شيء يضحكك؟",
-  "ما لعبتك المفضلة؟",
-  "من أكثر عضو تتفاعل معه؟",
-  "ما البلد الذي تريد زيارته؟",
-  "ما أجمل ذكرى عندك؟",
-  "لو امتلكت قوة خارقة، ماذا تختار؟",
-  "ما هدفك هذه السنة؟",
-  "ما أفضل فيلم شاهدته؟",
-  "ما أكثر شيء تحبه في السيرفر؟",
-  "ما المهارة التي تريد تعلمها؟",
-  "ما أكثر موقف مضحك حدث لك؟"
+  "ما هدفك الأكبر؟", "ما أجمل ذكرى عندك؟",
+  "ما اللعبة التي لا تمل منها؟", "ما المهارة التي تريد تعلمها؟",
+  "ما الشيء الذي يجعلك تضحك؟", "ما أفضل نصيحة سمعتها؟"
+];
+
+const truths = [
+  "ما أكثر موقف مضحك حدث لك؟", "ما هدفك لهذه السنة؟",
+  "ما أكثر لعبة تحبها؟", "ما صفة تحبها في نفسك؟"
 ];
 
 const dares = [
-  "امدح عضوًا في السيرفر 😎",
-  "اكتب نكتة قصيرة 😂",
-  "صف مزاجك بثلاثة إيموجيات!",
-  "اكتب اسم لعبتك بطريقة مزخرفة.",
-  "قل شيئًا إيجابيًا عن السيرفر.",
-  "تحدّ أحد الأعضاء في لعبة!"
+  "اكتب مجاملة لطيفة لشخص في السيرفر.",
+  "اكتب اسم لعبتك المفضلة مع إيموجي.",
+  "أرسل رسالة إيجابية للجميع.",
+  "اكتب جملة دون حرف الألف."
 ];
 
-const roulette = new Map();
-const pick = a => a[Math.floor(Math.random() * a.length)];
-
-const embed = (title, description) =>
-  new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle(title)
-    .setDescription(description)
-    .setFooter({ text: "VEX Guard" });
-
-bot.once("ready", () => {
-  console.log(`🛡️ VEX Guard متصل: ${bot.user.tag}`);
-});
-
-bot.on("interactionCreate", async i => {
-  try {
-    if (i.isButton()) {
-      const session = roulette.get(i.guildId);
-
-      if (!session) {
-        return i.reply({
-          content: "انتهت هذه الجولة.",
-          ephemeral: true
-        });
-      }
-
-      if (i.customId === "rjoin") {
-        if (session.started) {
-          return i.reply({
-            content: "السحب بدأ بالفعل!",
-            ephemeral: true
-          });
-        }
-
-        session.players.add(i.user.id);
-
-        return i.reply({
-          content: `🎟️ انضممت! عدد المشاركين: ${session.players.size}`,
-          ephemeral: true
-        });
-      }
-
-      if (i.customId === "rdraw") {
-        if (i.user.id !== session.owner) {
-          return i.reply({
-            content: "فقط صاحب الجولة يستطيع بدء السحب.",
-            ephemeral: true
-          });
-        }
-
-        if (session.players.size < 2) {
-          return i.reply({
-            content: "يجب انضمام عضوين على الأقل!",
-            ephemeral: true
-          });
-        }
-
-        session.started = true;
-        const winner = pick([...session.players]);
-        roulette.delete(i.guildId);
-
-        return i.update({
-          embeds: [
-            embed(
-              "🎡 انتهت الروليت!",
-              `🏆 الفائز هو <@${winner}>!\n👥 عدد المشاركين: ${session.players.size}`
-            )
-          ],
-          components: []
-        });
-      }
-
-      return;
-    }
-
-    if (!i.isChatInputCommand()) return;
-
-    const n = i.commandName;
-    const member = i.member;
-    const guild = i.guild;
-    const target = i.options.getUser("العضو");
-    const reason = i.options.getString("السبب") || "لم يحدد السبب";
-
-    const modCommands = [
-      "طرد", "حظر", "تحذير", "مهلة",
-      "إنهاء_المهلة", "لقب", "مسح", "قفل", "فتح"
-    ];
-
-    if (
-      modCommands.includes(n) &&
-      !member.permissions.has(PermissionFlagsBits.ManageGuild) &&
-      !member.permissions.has(PermissionFlagsBits.Administrator)
-    ) {
-      return i.reply({
-        content: "⛔ هذا الأمر للمشرفين فقط.",
-        ephemeral: true
-      });
-    }
-
-    if (n === "روليت") {
-      if (roulette.has(guild.id)) {
-        return i.reply({
-          content: "هناك جولة روليت مفتوحة بالفعل!",
-          ephemeral: true
-        });
-      }
-
-      roulette.set(guild.id, {
-        owner: i.user.id,
-        players: new Set([i.user.id]),
-        started: false
-      });
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("rjoin")
-          .setLabel("🎟️ انضمام")
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId("rdraw")
-          .setLabel("🎡 ابدأ السحب")
-          .setStyle(ButtonStyle.Primary)
-      );
-
-      return i.reply({
-        embeds: [
-          embed(
-            "🎡 روليت VEX الجماعية",
-            `بدأت الجولة بواسطة ${i.user}!\nاضغط انضمام للمشاركة، ثم يبدأ صاحب الجولة السحب.\n👥 المشاركون: 1`
-          )
-        ],
-        components: [row]
-      });
-    }
-
-    if (["كت", "سؤال", "سؤال_إضافي"].includes(n)) {
-      return i.reply({
-        embeds: [embed("🎲 سؤال عشوائي", pick(questions))]
-      });
-    }
-
-    if (n === "صراحة") return i.reply(pick(questions));
-
-    if (["تحدي", "تحدي_جماعي", "تحدي_الأصدقاء"].includes(n)) {
-      return i.reply(`🔥 التحدي: ${pick(dares)}`);
-    }
-
-    if (n === "روليت_مساعدة") {
-      return i.reply(
-        "استخدم /روليت، ثم ينضم الأعضاء بالزر، وبعدها يبدأ صاحب الجولة السحب. يلزم عضوان على الأقل."
-      );
-    }
-
-    if ([
-      "مساعدة", "مساعدة_الألعاب",
-      "قائمة_الألعاب", "مساعدة_الإدارة"
-    ].includes(n)) {
-      return i.reply({
-        embeds: [
-          embed(
-            "🛡️ أوامر VEX Guard",
-            commands
-              .map(c => `/${c[0]} — ${c[1]}`)
-              .slice(0, 25)
-              .join("\n")
-          )
-        ],
-        ephemeral: true
-      });
-    }
-
-    if (n === "بنق") {
-      return i.reply(`🏓 سرعة البوت: ${bot.ws.ping}ms`);
-    }
-
-    if (n === "بوت" || n === "حالة") {
-      return i.reply(
-        `🛡️ VEX Guard متصل!\nعدد السيرفرات: ${bot.guilds.cache.size}\nالبنق: ${bot.ws.ping}ms`
-      );
-    }
-
-    if (n === "خادم" || n === "إحصائيات") {
-      return i.reply(
-        `🏰 **${guild.name}**\nالأعضاء: ${guild.memberCount}\nالقنوات: ${guild.channels.cache.size}\nالرتب: ${guild.roles.cache.size}`
-      );
-    }
-
-    if (["عضو", "معلوماتي", "عمر_الحساب"].includes(n)) {
-      return i.reply(
-        `👤 ${i.user}\nID: ${i.user.id}\nتاريخ إنشاء الحساب: <t:${Math.floor(i.user.createdTimestamp / 1000)}:D>`
-      );
-    }
-
-    if (n === "أفاتار") {
-      return i.reply({
-        embeds: [
-          embed(
-            "🖼️ صورتك الشخصية",
-            i.user.displayAvatarURL({ size: 1024 })
-          )
-        ]
-      });
-    }
-
-    if (n === "أيقونة") {
-      return i.reply(guild.iconURL({ size: 1024 }) || "لا توجد أيقونة.");
-    }
-
-    if ([
-      "الأعضاء", "عدد_القنوات", "عدد_الرتب",
-      "القنوات", "الرتب"
-    ].includes(n)) {
-      const value = n === "الأعضاء"
-        ? guild.memberCount
-        : ["القنوات", "عدد_القنوات"].includes(n)
-          ? guild.channels.cache.size
-          : guild.roles.cache.size;
-
-      return i.reply(`📊 العدد: ${value}`);
-    }
-
-    if (n === "الوقت" || n === "تاريخ") {
-      return i.reply(
-        new Date().toLocaleString("ar-DZ", {
-          timeZone: "Africa/Algiers"
-        })
-      );
-    }
-
-    if (n === "المالك") {
-      return i.reply(`👑 مالك السيرفر: <@${guild.ownerId}>`);
-    }
-
-    if (n === "رتبتي") {
-      return i.reply(`🎭 أعلى رتبة لديك: **${member.roles.highest.name}**`);
-    }
-
-    if (n === "حظ") {
-      return i.reply(`🍀 حظك اليوم: ${Math.floor(Math.random() * 101)}%`);
-    }
-
-    if (n === "نرد") {
-      return i.reply(`🎲 النتيجة: ${1 + Math.floor(Math.random() * 6)}`);
-    }
-
-    if (n === "عملة") {
-      return i.reply(Math.random() < 0.5 ? "🪙 صورة!" : "🪙 كتابة!");
-    }
-
-    if (n === "رقم") {
-      return i.reply(`🔢 رقمك: ${1 + Math.floor(Math.random() * 100)}`);
-    }
-
-    if (n === "اختيار" || n === "توقع") {
-      return i.reply(pick(["نعم!", "لا!", "ربما!", "جرّب مرة أخرى!"]));
-    }
-
-    if (n === "نكتة") {
-      return i.reply("😂 لماذا الكمبيوتر بردان؟ لأنه فاتح الويندوز!");
-    }
-
-    if (n === "حقيقة") {
-      return i.reply("🧠 للأخطبوط ثلاثة قلوب.");
-    }
-
-    if (n === "لغز" || n === "فزورة") {
-      return i.reply("🧩 ما الشيء الذي كلما أخذت منه كبر؟ ||الحفرة||");
-    }
-
-    if (n === "نصيحة" || n === "حكمة") {
-      return i.reply("💡 استمر في المحاولة، وتعلّم من أخطائك.");
-    }
-
-    if (n === "اقتباس") {
-      return i.reply("✨ النجاح يبدأ بخطوة صغيرة.");
-    }
-
-    if (n === "إيموجي") {
-      return i.reply(pick(["😂", "🔥", "💎", "👑", "🎮", "⚽"]));
-    }
-
-    if (n === "لون") {
-      return i.reply(pick(["🔴 أحمر", "🔵 أزرق", "🟢 أخضر", "🟣 بنفسجي"]));
-    }
-
-    if (n === "اسم") {
-      return i.reply(pick(["Vortex", "Nova", "Shadow", "Titan", "Blaze"]));
-    }
-
-    if (n === "شعار") {
-      return i.reply("🛡️ **VEX Guard** — الحماية والتفاعل!");
-    }
-
-    if (n === "طرد" && target) {
-      const m = await guild.members.fetch(target.id);
-
-      if (!m.kickable) {
-        return i.reply({
-          content: "لا أستطيع طرد هذا العضو؛ تحقق من ترتيب الرتب.",
-          ephemeral: true
-        });
-      }
-
-      await m.kick(reason);
-      return i.reply(`👢 تم طرد ${target.tag}. السبب: ${reason}`);
-    }
-
-    if (n === "حظر" && target) {
-      const m = await guild.members.fetch(target.id);
-
-      if (!m.bannable) {
-        return i.reply({
-          content: "لا أستطيع حظر هذا العضو؛ تحقق من ترتيب الرتب.",
-          ephemeral: true
-        });
-      }
-
-      await m.ban({ reason });
-      return i.reply(`🔨 تم حظر ${target.tag}. السبب: ${reason}`);
-    }
-
-    if (n === "تحذير" && target) {
-      return i.reply(
-        `⚠️ تم تسجيل تحذير لـ ${target.tag}. السبب: ${reason}`
-      );
-    }
-
-    if (n === "مهلة" && target) {
-      const m = await guild.members.fetch(target.id);
-
-      if (!m.moderatable) {
-        return i.reply({
-          content: "لا أستطيع إسكات هذا العضو.",
-          ephemeral: true
-        });
-      }
-
-      await m.timeout(10 * 60 * 1000, reason);
-      return i.reply(`⏳ تم وضع ${target.tag} في مهلة 10 دقائق.`);
-    }
-
-    if (n === "إنهاء_المهلة" && target) {
-      const m = await guild.members.fetch(target.id);
-      await m.timeout(null);
-      return i.reply(`✅ انتهت المهلة عن ${target.tag}.`);
-    }
-
-    if (n === "لقب" && target) {
-      const m = await guild.members.fetch(target.id);
-      const nick = i.options.getString("السبب");
-
-      if (!nick) {
-        return i.reply({
-          content: "اكتب اللقب في خيار السبب.",
-          ephemeral: true
-        });
-      }
-
-      await m.setNickname(nick);
-      return i.reply("✅ تم تغيير اللقب.");
-    }
-
-    if (n === "مسح") {
-      const amount = i.options.getInteger("العدد");
-      const deleted = await i.channel.bulkDelete(amount, true);
-
-      return i.reply({
-        content: `🧹 تم حذف ${deleted.size} رسالة.`,
-        ephemeral: true
-      });
-    }
-
-    if (n === "قفل" || n === "فتح") {
-      await i.channel.permissionOverwrites.edit(
-        guild.roles.everyone,
-        { SendMessages: n === "قفل" ? false : null }
-      );
-
-      return i.reply(n === "قفل" ? "🔒 تم قفل القناة." : "🔓 تم فتح القناة.");
-    }
-
-    return i.reply(
-      "ℹ️ هذا الأمر مسجّل، لكن وظيفته تحتاج إلى برمجة إضافية."
-    );
-  } catch (e) {
-    console.error(e);
-
-    const msg = "❌ حدث خطأ. تحقق من صلاحيات البوت وترتيب الرتب.";
-
-    if (i.replied || i.deferred) {
-      await i.followUp({ content: msg, ephemeral: true }).catch(() => {});
-    } else {
-      await i.reply({ content: msg, ephemeral: true }).catch(() => {});
-    }
-  }
-});
-
-async function start() {
-  try {
-    const rest = new REST({ version: "10" }).setToken(TOKEN);
-    const route = Routes.applicationCommands(CLIENT_ID);
-
-    console.log(`🔄 تجهيز ${slash.length} أمرًا...`);
-
-    // الحفاظ على أمر Entry Point إذا كان موجودًا
-    const currentCommands = await rest.get(route);
-    const entryPoint = currentCommands.find(command => command.type === 4);
-
-    const body = slash.map(command => command.toJSON());
-
-    if (entryPoint) {
-      body.push({
-        name: entryPoint.name,
-        type: entryPoint.type,
-        description: entryPoint.description,
-        handler: entryPoint.handler,
-        integration_types: entryPoint.integration_types,
-        contexts: entryPoint.contexts,
-        options: entryPoint.options,
-        nsfw: entryPoint.nsfw
-      });
-
-      console.log("ℹ️ تم تضمين Entry Point في التحديث.");
-    }
-
-    await rest.put(route, { body });
-
-    console.log(`✅ تم تسجيل ${slash.length} أمرًا عالميًا.`);
-    await bot.login(TOKEN);
-  } catch (e) {
-    console.error("❌ خطأ في التشغيل:", e);
-    process.exit(1);
-  }
+const riddles = [
+  ["ما الشيء الذي له أسنان ولا يعض؟", "المشط"],
+  ["ما الشيء الذي كلما أخذت منه كبر؟", "الحفرة"],
+  ["ما الشيء الذي يكتب ولا يقرأ؟", "القلم"]
+];
+
+async function sendTicketPanel(i) {
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("vex_ticket_support")
+      .setLabel("💬 الدعم والمساعدة").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("vex_ticket_shop")
+      .setLabel("🛒 الشراء").setStyle(ButtonStyle.Success)
+  );
+
+  return i.reply({
+    embeds: [embed(
+      "🎫 VEX GUARD | مركز التذاكر",
+      "مرحبًا بك في مركز التذاكر!\n\n" +
+      "💬 **الدعم والمساعدة:** للمشاكل والاستفسارات.\n" +
+      "🛒 **الشراء:** لطلبات الشراء.\n\n" +
+      "اختر الزر المناسب لفتح تكت خاص."
+    )],
+    components: [row]
+  });
 }
 
-start();
+async function createTicket(i, type) {
+  const guild = i.guild;
+  const user = i.user;
+
+  if (!guild) {
+    return i.reply({ content: "افتح التكت داخل السيرفر.", ephemeral: true });
+  }
+
+  const existing = guild.channels.cache.find(ch =>
+    ch.type === ChannelType.GuildText &&
+    ch.topic?.includes(`vex-owner=${user.id};vex-type=${type}`)
+  );
