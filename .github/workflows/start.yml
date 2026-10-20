@@ -1,3 +1,4 @@
+
 name: VEX Guard
 
 on:
@@ -11,18 +12,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: تحميل ملفات البوت
+      - name: 📥 تحميل ملفات البوت
         uses: actions/checkout@v4
 
-      - name: إعداد Node.js
+      - name: ⚙️ إعداد Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: تثبيت مكتبة Discord.js
-        run: npm install discord.js
+      - name: 📦 تثبيت المكتبات
+        run: |
+          node --version
+          npm install discord.js
 
-      - name: تشغيل VEX Guard
+      - name: 🔍 التحقق من ملف البوت
+        run: |
+          ls -la
+          node --check vex.js
+
+      - name: 🚀 تشغيل VEX Guard
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
