@@ -13,7 +13,7 @@ const {
 } = require("discord.js");
 
 // =============================
-// إعدادات VEX GUARD
+// إعدادات VEX GUARD - XR
 // =============================
 
 const TOKEN = process.env.DISCORD_TOKEN;
@@ -155,6 +155,7 @@ const commands = Object.entries(commandDescriptions).map(
       .setName(name)
       .setDescription(description);
 
+    // خيارات العضو الاختيارية
     if ([
       "عضو", "أفاتار", "طرد", "حظر", "تحذير",
       "مهلة", "إنهاء_المهلة", "لقب",
@@ -167,6 +168,7 @@ const commands = Object.entries(commandDescriptions).map(
       );
     }
 
+    // خيارات النص
     if ([
       "تحذير", "مهلة", "لقب", "إعلان",
       "رسالة", "اقتراح", "موضوع", "طرد", "حظر"
@@ -468,7 +470,7 @@ async function createTicket(interaction, type) {
 }
 
 // =============================
-// تشغيل البوت
+// تشغيل البوت والتفاعلات
 // =============================
 
 bot.once("ready", () => {
@@ -477,7 +479,6 @@ bot.once("ready", () => {
 
 bot.on("interactionCreate", async interaction => {
   try {
-    // الأزرار
     if (interaction.isButton()) {
       if (
         interaction.customId === "vote_yes" ||
@@ -599,15 +600,12 @@ bot.on("interactionCreate", async interaction => {
     const target = interaction.options.getUser("العضو");
     const text = interaction.options.getString("النص");
 
-    const reply = content =>
-      interaction.reply({ content });
+    const reply = content => interaction.reply({ content });
 
-    // التذاكر
     if (name === "بلاغ") {
       return await sendTicketPanel(interaction);
     }
 
-    // حماية أوامر الإدارة
     if (adminCommands.includes(name) && !isStaff(member)) {
       return interaction.reply({
         content: "⛔ هذا الأمر مخصص للإدارة.",
@@ -615,7 +613,7 @@ bot.on("interactionCreate", async interaction => {
       });
     }
 
-    // أوامر المساعدة
+    // المساعدة
     if (name === "مساعدة") {
       return reply(
         "🛡️ **VEX GUARD — XR**\n" +
@@ -648,7 +646,7 @@ bot.on("interactionCreate", async interaction => {
     }
 
     if (name === "بوت") {
-      return reply(`🤖 أنا VEX Guard\n🏠 السيرفر: XR\n⚡ البوت يعمل.`);
+      return reply("🤖 أنا VEX Guard\n🏠 السيرفر: XR\n⚡ البوت يعمل.");
     }
 
     if (name === "خادم" || name === "إحصائيات") {
@@ -755,9 +753,8 @@ bot.on("interactionCreate", async interaction => {
       if (!guild) return reply("هذا الأمر داخل السيرفر فقط.");
 
       const currentMember = await guild.members.fetch(interaction.user.id);
-      const role = currentMember.roles.highest;
 
-      return reply(`🎭 أعلى رتبة لديك: **${role.name}**`);
+      return reply(`🎭 أعلى رتبة لديك: **${currentMember.roles.highest.name}**`);
     }
 
     if (name === "عمر_الحساب") {
@@ -786,7 +783,7 @@ bot.on("interactionCreate", async interaction => {
       return reply(`📅 التاريخ: ${new Date().toLocaleDateString("ar-DZ")}`);
     }
 
-    // ألعاب وترفيه
+    // الألعاب والترفيه
     if (["كت", "سؤال", "سؤال_إضافي"].includes(name)) {
       return reply("❓ " + pick(questions));
     }
@@ -805,10 +802,7 @@ bot.on("interactionCreate", async interaction => {
 
     if (name === "روليت") {
       if (!guild) return reply("هذا الأمر داخل السيرفر فقط.");
-
-      if (roulette.has(guild.id)) {
-        return reply("هناك روليت جارية بالفعل.");
-      }
+      if (roulette.has(guild.id)) return reply("هناك روليت جارية بالفعل.");
 
       roulette.set(guild.id, {
         hostId: interaction.user.id,
@@ -1022,11 +1016,18 @@ bot.on("interactionCreate", async interaction => {
     }
 
     if (name === "ترتيب") {
-      return reply("🔀 " + pick(["المركز الأول 🥇", "المركز الثاني 🥈", "المركز الثالث 🥉"]));
+      return reply("🔀 " + pick([
+        "المركز الأول 🥇",
+        "المركز الثاني 🥈",
+        "المركز الثالث 🥉"
+      ]));
     }
 
     if (name === "فريق") {
-      return reply("🔴 للفريق الأحمر استخدم /فريق_أحمر\n🔵 للفريق الأزرق استخدم /فريق_أزرق");
+      return reply(
+        "🔴 للفريق الأحمر استخدم /فريق_أحمر\n" +
+        "🔵 للفريق الأزرق استخدم /فريق_أزرق"
+      );
     }
 
     if (name === "فريق_أحمر") {
@@ -1100,7 +1101,9 @@ bot.on("interactionCreate", async interaction => {
       if (!targetMember) return reply("❌ لم أجد العضو في السيرفر.");
       if (!targetMember.bannable) return reply("❌ لا أستطيع حظر هذا العضو.");
 
-      await targetMember.ban({ reason: text || "تم الحظر بواسطة الإدارة." });
+      await targetMember.ban({
+        reason: text || "تم الحظر بواسطة الإدارة."
+      });
 
       return reply(`🔨 تم حظر ${target.tag}.`);
     }
@@ -1134,9 +1137,14 @@ bot.on("interactionCreate", async interaction => {
       const targetMember = await guild.members.fetch(target.id).catch(() => null);
 
       if (!targetMember) return reply("❌ لم أجد العضو.");
-      if (!targetMember.moderatable) return reply("❌ لا أستطيع إعطاء هذا العضو مهلة.");
+      if (!targetMember.moderatable) {
+        return reply("❌ لا أستطيع إعطاء هذا العضو مهلة.");
+      }
 
-      await targetMember.timeout(10 * 60 * 1000, text || "مهلة من الإدارة.");
+      await targetMember.timeout(
+        10 * 60 * 1000,
+        text || "مهلة من الإدارة."
+      );
 
       return reply(`⏳ تم إعطاء ${target.tag} مهلة لمدة 10 دقائق.`);
     }
@@ -1269,7 +1277,19 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
     // الاحتفاظ بأمر Entry Point إن كان موجودًا
     const entryPoint = currentCommands.find(command => command.type === 4);
 
-    const body = commands.map(command => command.toJSON());
+    // الإصلاح: الخيارات المطلوبة أولًا
+    const body = commands.map(command => {
+      const json = command.toJSON();
+
+      if (json.options) {
+        json.options.sort((a, b) => {
+          return Number(Boolean(b.required)) -
+            Number(Boolean(a.required));
+        });
+      }
+
+      return json;
+    });
 
     if (entryPoint) {
       body.push(entryPoint);
@@ -1278,6 +1298,7 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
     await rest.put(route, { body });
 
     console.log(`✅ تم تسجيل ${commands.length} أمرًا.`);
+
     await bot.login(TOKEN);
 
   } catch (error) {
