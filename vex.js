@@ -1,617 +1,622 @@
 
 const {
-  Client, GatewayIntentBits, REST, Routes,
-  SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits,
-  ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  EmbedBuilder
 } = require("discord.js");
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const TICKET_CATEGORY_ID = process.env.TICKET_CATEGORY_ID || "";
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error("❌ ناقص DISCORD_TOKEN أو CLIENT_ID في GitHub Secrets.");
+  console.error("❌ أضف DISCORD_TOKEN و CLIENT_ID في Environment Variables.");
   process.exit(1);
 }
 
-const bot = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
+  ]
 });
 
-const definitions = [
-  ["مساعدة", "عرض قائمة الأوامر"],
-  ["معلومات", "معلومات البوت"],
-  ["سيرفر", "معلومات السيرفر"],
-  ["عضو", "معلومات عضو"],
-  ["صورة", "صورة عضو"],
-  ["بنق", "سرعة استجابة البوت"],
-  ["وقت", "الوقت الحالي"],
-  ["رابط", "رابط دعوة البوت"],
-  ["تكت", "إرسال لوحة التكت"],
-  ["اغلاق_التكت", "إغلاق التكت الحالي"],
-  ["طرد", "طرد عضو"],
-  ["حظر", "حظر عضو"],
-  ["الغاء_حظر", "إلغاء حظر عضو"],
-  ["تحذير", "تحذير عضو"],
-  ["تحذيرات", "عرض تحذيرات عضو"],
-  ["مسح_تحذيرات", "مسح تحذيرات عضو"],
-  ["مسح", "مسح رسائل"],
-  ["مهلة", "إعطاء عضو مهلة"],
-  ["الغاء_المهلة", "إزالة المهلة"],
-  ["قفل", "قفل القناة"],
-  ["فتح", "فتح القناة"],
-  ["بطء", "تحديد وضع البطء"],
-  ["اعلان", "إرسال إعلان"],
-  ["انشاء_قناة", "إنشاء قناة"],
-  ["حذف_قناة", "حذف القناة الحالية"],
-  ["اضافة_رتبة", "إضافة رتبة لعضو"],
-  ["حذف_رتبة", "حذف رتبة من عضو"],
-  ["لقب", "تغيير لقب عضو"],
-  ["رولات", "عرض رتب السيرفر"],
-  ["اعضاء", "عدد أعضاء السيرفر"],
-  ["اختيار", "اختيار عشوائي"],
-  ["رقم", "اختيار رقم عشوائي"],
-  ["عملة", "رمي عملة"],
-  ["نرد", "رمي النرد"],
-  ["نكتة", "نكتة عشوائية"],
-  ["حقيقة", "حقيقة عشوائية"],
-  ["تحدي", "تحدي عشوائي"],
-  ["تخمين", "لعبة تخمين رقم"],
-  ["تصويت", "إنشاء تصويت"],
-  ["فائز", "اختيار فائز عشوائي"],
-  ["زخرفة", "زخرفة اسم"],
-  ["ثمانية", "اسأل الكرة السحرية"],
-  ["تاريخ", "تاريخ اليوم"],
-  ["حروف", "حروف عشوائية"],
-  ["عكس", "عكس نص"],
-  ["كرر", "تكرار نص"],
-  ["رابط_صورة", "عرض صورة عضو"],
-  ["منشن", "منشن عضو"],
-  ["قوانين", "عرض القوانين"],
-  ["دعوة", "إنشاء رابط دعوة للسيرفر"]
-];
+const commands = [];
+const admin = PermissionFlagsBits.Administrator;
+const moderate = PermissionFlagsBits.ModerateMembers;
+const kickPerm = PermissionFlagsBits.KickMembers;
+const banPerm = PermissionFlagsBits.BanMembers;
+const manageMessages = PermissionFlagsBits.ManageMessages;
+const manageChannels = PermissionFlagsBits.ManageChannels;
+const manageRoles = PermissionFlagsBits.ManageRoles;
 
-const adminCommands = new Set([
-  "تكت", "اغلاق_التكت", "طرد", "حظر", "الغاء_حظر",
-  "تحذير", "مسح_تحذيرات", "مسح", "مهلة", "الغاء_المهلة",
-  "قفل", "فتح", "بطء", "اعلان", "انشاء_قناة",
-  "حذف_قناة", "اضافة_رتبة", "حذف_رتبة", "لقب"
-]);
+function add(name, description, options = [], permission = null) {
+  const command = new SlashCommandBuilder()
+    .setName(name)
+    .setDescription(description);
 
-const builders = {
-  "عضو": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(false)),
-  "صورة": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(false)),
-  "رابط_صورة": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(false)),
-  "طرد": b => b
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true))
-    .addStringOption(o => o.setName("السبب").setDescription("سبب الطرد")),
-  "حظر": b => b
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true))
-    .addStringOption(o => o.setName("السبب").setDescription("سبب الحظر")),
-  "الغاء_حظر": b => b.addStringOption(o =>
-    o.setName("الايدي").setDescription("ID العضو").setRequired(true)),
-  "تحذير": b => b
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true))
-    .addStringOption(o => o.setName("السبب").setDescription("سبب التحذير")),
-  "تحذيرات": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(true)),
-  "مسح_تحذيرات": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(true)),
-  "مسح": b => b.addIntegerOption(o =>
-    o.setName("العدد").setDescription("عدد الرسائل")
-      .setMinValue(1).setMaxValue(100).setRequired(true)),
-  "مهلة": b => b
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true))
-    .addIntegerOption(o => o.setName("الدقائق").setDescription("مدة المهلة")
-      .setMinValue(1).setMaxValue(40320).setRequired(true)),
-  "الغاء_المهلة": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(true)),
-  "بطء": b => b.addIntegerOption(o =>
-    o.setName("الثواني").setDescription("0 إلى 21600")
-      .setMinValue(0).setMaxValue(21600).setRequired(true)),
-  "اعلان": b => b.addStringOption(o =>
-    o.setName("النص").setDescription("نص الإعلان").setRequired(true)),
-  "انشاء_قناة": b => b.addStringOption(o =>
-    o.setName("الاسم").setDescription("اسم القناة").setRequired(true)),
-  "اضافة_رتبة": b => b
-    .addStringOption(o => o.setName("اسم_الرتبة").setDescription("اسم الرتبة").setRequired(true))
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true)),
-  "حذف_رتبة": b => b
-    .addStringOption(o => o.setName("اسم_الرتبة").setDescription("اسم الرتبة").setRequired(true))
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true)),
-  "لقب": b => b
-    .addUserOption(o => o.setName("العضو").setDescription("العضو").setRequired(true))
-    .addStringOption(o => o.setName("النص").setDescription("اللقب الجديد").setRequired(true)),
-  "اختيار": b => b.addStringOption(o =>
-    o.setName("الخيارات").setDescription("افصل الخيارات بفواصل").setRequired(true)),
-  "رقم": b => b
-    .addIntegerOption(o => o.setName("من").setDescription("الحد الأدنى").setRequired(true))
-    .addIntegerOption(o => o.setName("الى").setDescription("الحد الأعلى").setRequired(true)),
-  "تخمين": b => b.addIntegerOption(o =>
-    o.setName("الرقم").setDescription("رقم من 1 إلى 10")
-      .setMinValue(1).setMaxValue(10).setRequired(true)),
-  "تصويت": b => b.addStringOption(o =>
-    o.setName("السؤال").setDescription("سؤال التصويت").setRequired(true)),
-  "فائز": b => b.addStringOption(o =>
-    o.setName("المشاركون").setDescription("أسماء مفصولة بفواصل").setRequired(true)),
-  "زخرفة": b => b.addStringOption(o =>
-    o.setName("الاسم").setDescription("الاسم").setRequired(true)),
-  "ثمانية": b => b.addStringOption(o =>
-    o.setName("السؤال").setDescription("سؤالك").setRequired(true)),
-  "حروف": b => b.addIntegerOption(o =>
-    o.setName("العدد").setDescription("عدد الحروف")
-      .setMinValue(1).setMaxValue(50).setRequired(true)),
-  "عكس": b => b.addStringOption(o =>
-    o.setName("النص").setDescription("النص").setRequired(true)),
-  "كرر": b => b.addStringOption(o =>
-    o.setName("النص").setDescription("النص").setRequired(true)),
-  "منشن": b => b.addUserOption(o =>
-    o.setName("العضو").setDescription("العضو").setRequired(true))
-};
-
-const slashCommands = definitions.map(([name, description]) => {
-  const b = new SlashCommandBuilder().setName(name).setDescription(description);
-  if (builders[name]) builders[name](b);
-  return b;
-});
-
-function makeEmbed(title, description, color = 0x5865F2) {
-  return new EmbedBuilder()
-    .setColor(color)
-    .setTitle(title)
-    .setDescription(description)
-    .setTimestamp();
-}
-
-function isStaff(i) {
-  return i.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-    i.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
-}
-
-const warnings = new Map();
-
-const randomItem = array => array[Math.floor(Math.random() * array.length)];
-const jokes = [
-  "واحد راح للطبيب قاله: كل ما نشرب قهوة توجعني عيني، قاله نحي الملعقة من الكأس 😂",
-  "واحد اشترى ساعة ذكية، ولات هي تقول له وقتاش يرقد 😂",
-  "واحد بخيل طفى الضوء باش ما يشوفش فاتورة الكهرباء 😭"
-];
-const truths = [
-  "ما هو أكثر شيء تحب تتعلمه؟",
-  "ما هي لعبتك المفضلة؟",
-  "ما هو هدفك لهذا العام؟"
-];
-const dares = [
-  "اكتب جملة مضحكة في الدردشة 😂",
-  "امدح عضوًا من السيرفر ⭐",
-  "اكتب اسم لعبتك المفضلة 🎮"
-];
-const magicAnswers = [
-  "نعم بالتأكيد ✅", "ممكن جدًا 🤔", "لا أظن ذلك ❌",
-  "اسألني لاحقًا 🔮", "الاحتمال كبير 😎"
-];
-
-async function sendTicketPanel(i) {
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("xr_ticket_open")
-      .setLabel("فتح تكت")
-      .setEmoji("🎫")
-      .setStyle(ButtonStyle.Primary)
-  );
-  await i.reply({
-    embeds: [makeEmbed("🎫 نظام التكت", "اضغط على الزر لفتح تكت خاص مع الإدارة.")],
-    components: [row]
-  });
-}
-
-async function createTicket(i) {
-  const guild = i.guild;
-  const existing = guild.channels.cache.find(c =>
-    c.type === ChannelType.GuildText &&
-    c.name === `ticket-${i.user.id}`
-  );
-
-  if (existing) {
-    return i.reply({ content: `لديك تكت مفتوح بالفعل: ${existing}`, ephemeral: true });
+  for (const option of options) {
+    command.addStringOption(o =>
+      o.setName(option.name)
+        .setDescription(option.description)
+        .setRequired(option.required ?? true)
+    );
   }
 
-  const options = {
-    name: `ticket-${i.user.id}`,
-    type: ChannelType.GuildText,
-    permissionOverwrites: [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel]
-      },
-      {
-        id: i.user.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory
-        ]
-      },
-      {
-        id: bot.user.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageChannels
-        ]
-      }
-    ]
-  };
+  if (permission) {
+    command.setDefaultMemberPermissions(permission);
+  }
 
-  if (TICKET_CATEGORY_ID) options.parent = TICKET_CATEGORY_ID;
-
-  const channel = await guild.channels.create(options);
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("xr_ticket_close")
-      .setLabel("إغلاق التكت")
-      .setEmoji("🔒")
-      .setStyle(ButtonStyle.Danger)
-  );
-
-  await channel.send({
-    content: `${i.user} أهلًا بك! اشرح مشكلتك هنا.`,
-    components: [row]
-  });
-  await i.reply({ content: `✅ تم إنشاء التكت: ${channel}`, ephemeral: true });
+  commands.push(command);
 }
 
-bot.on("interactionCreate", async i => {
+const target = [{
+  name: "user",
+  description: "معرّف العضو أو منشنه",
+  required: true
+}];
+
+const reason = [{
+  name: "reason",
+  description: "سبب الإجراء",
+  required: false
+}];
+
+const targetReason = [...target, ...reason];
+
+// 1–10: معلومات ومساعدة
+add("help", "عرض قائمة أوامر VEX Guard");
+add("ping", "فحص سرعة استجابة البوت");
+add("botinfo", "معلومات البوت");
+add("serverinfo", "معلومات السيرفر");
+add("userinfo", "معلومات عضو", target);
+add("avatar", "عرض صورة عضو", target);
+add("membercount", "عدد أعضاء السيرفر");
+add("roleinfo", "معلومات رتبة", [{
+  name: "role",
+  description: "اسم الرتبة أو معرّفها"
+}]);
+add("channelinfo", "معلومات الروم");
+add("uptime", "مدة تشغيل البوت");
+
+// 11–20: الإدارة
+add("kick", "طرد عضو", targetReason, kickPerm);
+add("ban", "حظر عضو", targetReason, banPerm);
+add("unban", "فك الحظر عن عضو", target);
+add("timeout", "إسكات عضو بالدقائق", [
+  ...target,
+  { name: "minutes", description: "المدة بالدقائق" },
+  ...reason
+], moderate);
+add("untimeout", "إلغاء إسكات عضو", target, moderate);
+add("warn", "تسجيل تحذير لعضو", targetReason, moderate);
+add("clear", "مسح الرسائل", [{
+  name: "amount",
+  description: "عدد الرسائل من 1 إلى 100"
+}], manageMessages);
+add("lock", "قفل الروم الحالي", [], manageChannels);
+add("unlock", "فتح الروم الحالي", [], manageChannels);
+add("slowmode", "تحديد بطء المحادثة بالثواني", [{
+  name: "seconds",
+  description: "من 0 إلى 21600"
+}], manageChannels);
+
+// 21–30: الرتب والقنوات
+add("nick", "تغيير لقب عضو", [
+  ...target,
+  { name: "nickname", description: "اللقب الجديد" }
+], admin);
+add("addrole", "إضافة رتبة لعضو", [
+  ...target,
+  { name: "role", description: "معرّف الرتبة" }
+], manageRoles);
+add("removerole", "نزع رتبة من عضو", [
+  ...target,
+  { name: "role", description: "معرّف الرتبة" }
+], manageRoles);
+add("announce", "إرسال إعلان في الروم الحالي", [{
+  name: "message",
+  description: "نص الإعلان"
+}], admin);
+add("embed", "إرسال رسالة منسقة", [{
+  name: "message",
+  description: "النص"
+}], admin);
+add("poll", "إنشاء تصويت بسيط", [{
+  name: "question",
+  description: "سؤال التصويت"
+}]);
+add("say", "إرسال رسالة باسم البوت", [{
+  name: "message",
+  description: "الرسالة"
+}], admin);
+add("servericon", "عرض صورة السيرفر");
+add("serverroles", "عرض عدد الرتب");
+add("channels", "عدد قنوات السيرفر");
+
+// 31–40: حماية وإشراف
+add("purgeuser", "مسح رسائل عضو من آخر 100 رسالة", target, manageMessages);
+add("deafen", "كتم عضو صوتيًا", target, moderate);
+add("undeafen", "إلغاء الكتم الصوتي", target, moderate);
+add("move", "نقل عضو إلى رومك الصوتي", target, moderate);
+add("disconnect", "فصل عضو عن الصوت", target, moderate);
+add("rolelist", "عرض قائمة الرتب");
+add("botlist", "عرض البوتات الموجودة");
+add("memberlist", "عرض عدد الأعضاء والبوتات");
+add("checkperms", "عرض صلاحياتك");
+add("report", "إرسال بلاغ للإدارة", [{
+  name: "message",
+  description: "تفاصيل البلاغ"
+}]);
+
+// 41–50: أدوات إضافية
+add("coinflip", "رمي قطعة نقدية");
+add("roll", "رمي نرد");
+add("choose", "اختيار عشوائي بين خيارين", [
+  { name: "first", description: "الخيار الأول" },
+  { name: "second", description: "الخيار الثاني" }
+]);
+add("8ball", "اسأل الكرة السحرية", [{
+  name: "question",
+  description: "سؤالك"
+}]);
+add("hug", "إرسال تحية ودية لعضو", target);
+add("ship", "توافق الصداقة بين عضوين", [
+  ...target,
+  { name: "other", description: "معرّف العضو الثاني" }
+]);
+add("joke", "نكتة عشوائية");
+add("quote", "عبارة تحفيزية");
+add("remind", "تذكير برسالة داخل السيرفر", [{
+  name: "message",
+  description: "التذكير"
+}]);
+add("support", "معلومات الدعم");
+
+console.log("1️⃣ بدأ تشغيل VEX Guard");
+console.log("2️⃣ تجهيز الأوامر...");
+console.log(`📋 عدد الأوامر: ${commands.length}`);
+
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+// تسجيل عالمي: لا نستخدم GUILD_ID
+async function registerCommands() {
+  console.log(`3️⃣ جاري تسجيل ${commands.length} أمرًا عالميًا في Discord...`);
+
+  const route = Routes.applicationCommands(CLIENT_ID);
+  let timer;
+
   try {
-    if (i.isButton()) {
-      if (i.customId === "xr_ticket_open") {
-        return await createTicket(i);
-      }
+    const request = rest.put(route, {
+      body: commands.map(command => command.toJSON())
+    });
 
-      if (i.customId === "xr_ticket_close") {
-        if (!i.channel?.name.startsWith("ticket-")) {
-          return i.reply({ content: "هذا ليس تكت.", ephemeral: true });
-        }
-        if (!isStaff(i) && i.channel.name !== `ticket-${i.user.id}`) {
-          return i.reply({ content: "ليس لديك صلاحية إغلاق هذا التكت.", ephemeral: true });
-        }
-        await i.reply("🔒 سيتم إغلاق التكت بعد 3 ثوانٍ.");
-        setTimeout(() => i.channel.delete().catch(console.error), 3000);
-        return;
-      }
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("انتهت مهلة تسجيل الأوامر بعد 30 ثانية.")),
+        30000
+      );
+    });
 
-      if (i.customId === "vote_yes" || i.customId === "vote_no") {
-        return i.reply({
-          content: i.customId === "vote_yes" ? "✅ اخترت نعم." : "❌ اخترت لا.",
+    const result = await Promise.race([request, timeout]);
+    clearTimeout(timer);
+
+    console.log(`✅ تم تسجيل ${result.length} أمرًا عالميًا بنجاح.`);
+  } catch (error) {
+    clearTimeout(timer);
+    console.error("❌ فشل تسجيل الأوامر:");
+    console.error(error.message);
+
+    if (error.status) console.error("HTTP status:", error.status);
+    if (error.code) console.error("Error code:", error.code);
+
+    throw error;
+  }
+}
+
+client.once("ready", () => {
+  console.log(`🤖 البوت متصل باسم ${client.user.tag}`);
+});
+
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const { commandName, guild, member } = interaction;
+
+  try {
+    const reply = async message => {
+      if (interaction.deferred || interaction.replied) {
+        return interaction.followUp({
+          content: message,
           ephemeral: true
         });
       }
-    }
 
-    if (!i.isChatInputCommand()) return;
-
-    const name = i.commandName;
-    const guild = i.guild;
-    const user = i.user;
-    const target = i.options.getUser("العضو");
-    const reason = i.options.getString("السبب") || "لم يذكر سبب";
-    const targetMember = target
-      ? await guild.members.fetch(target.id).catch(() => null)
-      : null;
-
-    if (adminCommands.has(name) && !isStaff(i)) {
-      return i.reply({ content: "❌ تحتاج صلاحيات الإدارة لاستخدام هذا الأمر.", ephemeral: true });
-    }
-
-    if (name === "مساعدة") {
-      const list = definitions.map(([n, d], index) => `${index + 1}. **/${n}** — ${d}`).join("\n");
-      return i.reply({ embeds: [makeEmbed("📚 VEX Guard — 50 أمرًا", list)] });
-    }
-
-    if (name === "تكت") return await sendTicketPanel(i);
-
-    if (name === "اغلاق_التكت") {
-      if (!i.channel.name.startsWith("ticket-")) {
-        return i.reply({ content: "هذا ليس تكت.", ephemeral: true });
-      }
-      await i.reply("🔒 سيتم إغلاق التكت بعد 3 ثوانٍ.");
-      setTimeout(() => i.channel.delete().catch(console.error), 3000);
-      return;
-    }
-
-    if (name === "معلومات") {
-      return i.reply({
-        embeds: [makeEmbed("🤖 VEX Guard",
-          `**السيرفرات:** ${bot.guilds.cache.size}\n**الأوامر:** ${definitions.length}\n**البنق:** ${bot.ws.ping}ms`)]
+      return interaction.reply({
+        content: message,
+        ephemeral: true
       });
+    };
+
+    if (!guild) {
+      return reply("❌ هذا الأمر يعمل داخل السيرفرات فقط.");
     }
 
-    if (name === "سيرفر") {
-      return i.reply({
-        embeds: [makeEmbed(`📌 ${guild.name}`,
-          `**الأعضاء:** ${guild.memberCount}\n**القنوات:** ${guild.channels.cache.size}\n**تاريخ الإنشاء:** <t:${Math.floor(guild.createdTimestamp / 1000)}:D>`)]
-      });
+    if (commandName === "help") {
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle("VEX Guard | قائمة الأوامر")
+        .setDescription(
+          commands.map(c => `/${c.name} — ${c.description}`).join("\n")
+        );
+
+      return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
-    if (name === "عضو") {
-      const u = target || user;
-      const m = await guild.members.fetch(u.id).catch(() => null);
-      return i.reply({
-        embeds: [makeEmbed("👤 معلومات العضو",
-          `**الاسم:** ${u.tag}\n**ID:** ${u.id}\n**انضم:** ${m?.joinedTimestamp ? `<t:${Math.floor(m.joinedTimestamp / 1000)}:D>` : "غير معروف"}\n**تاريخ الحساب:** <t:${Math.floor(u.createdTimestamp / 1000)}:D>`)]
-      });
+    if (commandName === "ping") {
+      return reply(`🏓 Pong! ${client.ws.ping}ms`);
     }
 
-    if (name === "صورة" || name === "رابط_صورة") {
-      const u = target || user;
-      return i.reply({
-        embeds: [new EmbedBuilder().setTitle("🖼️ صورة العضو")
-          .setImage(u.displayAvatarURL({ size: 1024 })).setColor(0x5865F2)]
-      });
-    }
-
-    if (name === "بنق") return i.reply(`🏓 البنق: ${bot.ws.ping}ms`);
-    if (name === "وقت") return i.reply(`🕒 <t:${Math.floor(Date.now() / 1000)}:F>`);
-
-    if (name === "رابط") {
-      return i.reply(`رابط إضافة البوت: https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&scope=bot%20applications.commands&permissions=8`);
-    }
-
-    if (name === "دعوة") {
-      const channel = guild.channels.cache.find(c =>
-        c.type === ChannelType.GuildText &&
-        c.permissionsFor(guild.members.me).has(PermissionFlagsBits.CreateInstantInvite)
+    if (commandName === "uptime") {
+      const seconds = Math.floor(client.uptime / 1000);
+      return reply(
+        `⏱️ مدة التشغيل: ${Math.floor(seconds / 3600)}س ${Math.floor(seconds % 3600 / 60)}د`
       );
-      if (!channel) return i.reply({ content: "لا أملك صلاحية إنشاء دعوة.", ephemeral: true });
-      const invite = await channel.createInvite({ maxAge: 86400, maxUses: 0 });
-      return i.reply(`🔗 رابط الدعوة: ${invite.url}`);
     }
 
-    if (name === "طرد") {
-      if (!targetMember) return i.reply({ content: "لم أجد العضو.", ephemeral: true });
-      await targetMember.kick(reason);
-      return i.reply(`✅ تم طرد ${target.tag}. السبب: ${reason}`);
+    if (commandName === "botinfo") {
+      return reply(`🤖 ${client.user.tag}\n📋 ${commands.length} أمرًا مسجلًا`);
     }
 
-    if (name === "حظر") {
-      if (!targetMember) return i.reply({ content: "لم أجد العضو.", ephemeral: true });
-      await targetMember.ban({ reason });
-      return i.reply(`🔨 تم حظر ${target.tag}. السبب: ${reason}`);
-    }
-
-    if (name === "الغاء_حظر") {
-      const id = i.options.getString("الايدي");
-      await guild.members.unban(id);
-      return i.reply(`✅ تم إلغاء الحظر عن ID: ${id}`);
-    }
-
-    if (name === "تحذير") {
-      const list = warnings.get(target.id) || [];
-      list.push({ reason, moderator: user.id, date: Date.now() });
-      warnings.set(target.id, list);
-      return i.reply(`⚠️ تم تحذير ${target.tag}. عدد التحذيرات: ${list.length}`);
-    }
-
-    if (name === "تحذيرات") {
-      const list = warnings.get(target.id) || [];
-      return i.reply({
-        embeds: [makeEmbed("⚠️ تحذيرات العضو",
-          list.length ? list.map((w, n) => `${n + 1}. ${w.reason}`).join("\n") : "لا توجد تحذيرات مسجلة.")]
-      });
-    }
-
-    if (name === "مسح_تحذيرات") {
-      warnings.delete(target.id);
-      return i.reply(`✅ تم مسح التحذيرات المسجلة لـ ${target.tag}.`);
-    }
-
-    if (name === "مسح") {
-      const count = i.options.getInteger("العدد");
-      const deleted = await i.channel.bulkDelete(count, true);
-      return i.reply({ content: `🧹 تم حذف ${deleted.size} رسالة.`, ephemeral: true });
-    }
-
-    if (name === "مهلة") {
-      const minutes = i.options.getInteger("الدقائق");
-      await targetMember.timeout(minutes * 60000, "مهلة من VEX Guard");
-      return i.reply(`⏳ تم إعطاء ${target.tag} مهلة ${minutes} دقيقة.`);
-    }
-
-    if (name === "الغاء_المهلة") {
-      await targetMember.timeout(null);
-      return i.reply(`✅ تم إلغاء المهلة عن ${target.tag}.`);
-    }
-
-    if (name === "قفل" || name === "فتح") {
-      const locked = name === "قفل";
-      await i.channel.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: locked ? false : null
-      });
-      return i.reply(locked ? "🔒 تم قفل القناة." : "🔓 تم فتح القناة.");
-    }
-
-    if (name === "بطء") {
-      const seconds = i.options.getInteger("الثواني");
-      await i.channel.setRateLimitPerUser(seconds);
-      return i.reply(`🐢 تم ضبط البطء على ${seconds} ثانية.`);
-    }
-
-    if (name === "اعلان") {
-      await i.channel.send({ embeds: [makeEmbed("📢 إعلان", i.options.getString("النص"))] });
-      return i.reply({ content: "✅ تم إرسال الإعلان.", ephemeral: true });
-    }
-
-    if (name === "انشاء_قناة") {
-      const channel = await guild.channels.create({
-        name: i.options.getString("الاسم"),
-        type: ChannelType.GuildText
-      });
-      return i.reply(`✅ تم إنشاء القناة ${channel}`);
-    }
-
-    if (name === "حذف_قناة") {
-      await i.reply("🗑️ سيتم حذف القناة الحالية.");
-      return i.channel.delete();
-    }
-
-    if (name === "اضافة_رتبة" || name === "حذف_رتبة") {
-      const roleName = i.options.getString("اسم_الرتبة");
-      const role = guild.roles.cache.find(r => r.name === roleName);
-      if (!role) return i.reply({ content: "لم أجد الرتبة بهذا الاسم.", ephemeral: true });
-
-      if (name === "اضافة_رتبة") {
-        await targetMember.roles.add(role);
-        return i.reply(`✅ أضفت رتبة **${role.name}** إلى ${target.tag}.`);
-      }
-
-      await targetMember.roles.remove(role);
-      return i.reply(`✅ حذفت رتبة **${role.name}** من ${target.tag}.`);
-    }
-
-    if (name === "لقب") {
-      await targetMember.setNickname(i.options.getString("النص"));
-      return i.reply(`✅ تم تغيير لقب ${target.tag}.`);
-    }
-
-    if (name === "رولات") {
-      const roles = guild.roles.cache.filter(r => r.id !== guild.id).map(r => r.name);
-      return i.reply({ embeds: [makeEmbed("🎭 رتب السيرفر", roles.slice(0, 80).join("، ") || "لا توجد رتب.")] });
-    }
-
-    if (name === "اعضاء") return i.reply(`👥 عدد أعضاء السيرفر: **${guild.memberCount}**`);
-
-    if (name === "اختيار") {
-      const values = i.options.getString("الخيارات").split(",").map(x => x.trim()).filter(Boolean);
-      if (!values.length) return i.reply("اكتب خيارات مفصولة بفواصل.");
-      return i.reply(`🎯 الاختيار هو: **${randomItem(values)}**`);
-    }
-
-    if (name === "رقم") {
-      const min = i.options.getInteger("من");
-      const max = i.options.getInteger("الى");
-      if (max < min) return i.reply({ content: "الحد الأعلى يجب أن يكون أكبر من الحد الأدنى.", ephemeral: true });
-      return i.reply(`🎲 الرقم العشوائي: **${Math.floor(Math.random() * (max - min + 1)) + min}**`);
-    }
-
-    if (name === "عملة") return i.reply(Math.random() < 0.5 ? "🪙 صورة!" : "🪙 كتابة!");
-    if (name === "نرد") return i.reply(`🎲 نتيجتك: **${Math.floor(Math.random() * 6) + 1}**`);
-    if (name === "نكتة") return i.reply(randomItem(jokes));
-    if (name === "حقيقة") return i.reply(randomItem(truths));
-    if (name === "تحدي") return i.reply(randomItem(dares));
-
-    if (name === "تخمين") {
-      const guess = i.options.getInteger("الرقم");
-      const answer = Math.floor(Math.random() * 10) + 1;
-      return i.reply(guess === answer
-        ? `🎉 صحيح! الرقم هو ${answer}.`
-        : `😄 خطأ! الرقم كان ${answer}.`);
-    }
-
-    if (name === "تصويت") {
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("vote_yes").setLabel("نعم").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("vote_no").setLabel("لا").setStyle(ButtonStyle.Danger)
+    if (commandName === "serverinfo") {
+      return reply(
+        `🏠 ${guild.name}\n👥 الأعضاء: ${guild.memberCount}\n🆔 ${guild.id}`
       );
-      await i.channel.send({
-        embeds: [makeEmbed("📊 تصويت", i.options.getString("السؤال"))],
-        components: [row]
+    }
+
+    if (commandName === "membercount" || commandName === "memberlist") {
+      return reply(`👥 عدد الأعضاء: ${guild.memberCount}`);
+    }
+
+    if (commandName === "servericon") {
+      return interaction.reply({
+        content: guild.iconURL({ size: 1024 }) || "لا توجد صورة للسيرفر.",
+        ephemeral: true
       });
-      return i.reply({ content: "✅ تم إنشاء التصويت.", ephemeral: true });
     }
 
-    if (name === "فائز") {
-      const people = i.options.getString("المشاركون").split(",").map(x => x.trim()).filter(Boolean);
-      if (!people.length) return i.reply("أدخل أسماء المشاركين مفصولة بفواصل.");
-      return i.reply(`🏆 الفائز هو: **${randomItem(people)}**`);
+    if (commandName === "channels") {
+      return reply(`📚 عدد القنوات: ${guild.channels.cache.size}`);
     }
 
-    if (name === "زخرفة") {
-      const text = i.options.getString("الاسم");
-      return i.reply(`『 ${text} 』\n꧁༺ ${text} ༻꧂\n★彡 ${text} 彡★`);
+    if (commandName === "serverroles" || commandName === "rolelist") {
+      return reply(
+        guild.roles.cache.map(r => r.name).slice(0, 50).join("، ") ||
+        "لا توجد رتب."
+      );
     }
 
-    if (name === "ثمانية") return i.reply(`🔮 ${randomItem(magicAnswers)}`);
-    if (name === "تاريخ") return i.reply(`📅 ${new Date().toLocaleDateString("ar-DZ")}`);
+    if (commandName === "botlist") {
+      const bots = guild.members.cache.filter(m => m.user.bot);
+      return reply(`🤖 عدد البوتات في الذاكرة الحالية: ${bots.size}`);
+    }
 
-    if (name === "حروف") {
-      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      let result = "";
-      for (let n = 0; n < i.options.getInteger("العدد"); n++) {
-        result += letters[Math.floor(Math.random() * letters.length)];
+    if (commandName === "checkperms") {
+      return reply(`🔐 صلاحياتك:\n${member.permissions.toArray().join(", ")}`);
+    }
+
+    if (commandName === "userinfo" || commandName === "avatar") {
+      const input = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const user = await client.users.fetch(input);
+
+      if (commandName === "avatar") {
+        return interaction.reply({
+          content: user.displayAvatarURL({ size: 1024 }),
+          ephemeral: true
+        });
       }
-      return i.reply(`🔤 ${result}`);
+
+      return reply(
+        `👤 ${user.tag}\n🆔 ${user.id}\n📅 إنشاء الحساب: <t:${Math.floor(user.createdTimestamp / 1000)}:D>`
+      );
     }
 
-    if (name === "عكس") {
-      return i.reply(i.options.getString("النص").split("").reverse().join(""));
+    if (commandName === "roleinfo") {
+      const input = interaction.options.getString("role");
+      const role = guild.roles.cache.get(input) ||
+        guild.roles.cache.find(r => r.name === input);
+
+      return reply(role
+        ? `🏷️ ${role.name}\n🆔 ${role.id}\n👥 ${role.members.size} عضو`
+        : "❌ لم أجد الرتبة.");
     }
 
-    if (name === "كرر") {
-      return i.reply(i.options.getString("النص").slice(0, 1800));
+    if (commandName === "channelinfo") {
+      return reply(
+        `📍 ${interaction.channel.name}\n🆔 ${interaction.channel.id}`
+      );
     }
 
-    if (name === "منشن") return i.reply(`${target}`);
+    if (commandName === "lock" || commandName === "unlock") {
+      const locked = commandName === "lock";
 
-    if (name === "قوانين") {
-      return i.reply({
-        embeds: [makeEmbed("📜 قوانين السيرفر",
-          "1. الاحترام بين الأعضاء.\n2. ممنوع السب والإزعاج.\n3. ممنوع السبام.\n4. اتبع تعليمات الإدارة.\n5. استمتع بوقتك في XR.")]
-      });
+      await interaction.channel.permissionOverwrites.edit(
+        guild.roles.everyone,
+        { SendMessages: !locked }
+      );
+
+      return reply(locked ? "🔒 تم قفل الروم." : "🔓 تم فتح الروم.");
     }
+
+    if (commandName === "slowmode") {
+      const seconds = Number(interaction.options.getString("seconds"));
+
+      if (!Number.isInteger(seconds) || seconds < 0 || seconds > 21600) {
+        return reply("❌ اختر رقمًا من 0 إلى 21600.");
+      }
+
+      await interaction.channel.setRateLimitPerUser(seconds);
+      return reply(`✅ تم ضبط Slowmode إلى ${seconds} ثانية.`);
+    }
+
+    if (commandName === "clear") {
+      const amount = Number(interaction.options.getString("amount"));
+
+      if (!Number.isInteger(amount) || amount < 1 || amount > 100) {
+        return reply("❌ اختر عددًا من 1 إلى 100.");
+      }
+
+      await interaction.deferReply({ ephemeral: true });
+      const deleted = await interaction.channel.bulkDelete(amount, true);
+
+      return interaction.editReply(
+        `🧹 تم حذف ${deleted.size} رسالة. الرسائل الأقدم من 14 يومًا لا تُحذف بهذه الطريقة.`
+      );
+    }
+
+    if (commandName === "purgeuser") {
+      const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const messages = await interaction.channel.messages.fetch({ limit: 100 });
+      const matches = messages.filter(m => m.author.id === id);
+      const deleted = await interaction.channel.bulkDelete(matches, true);
+
+      return reply(`🧹 تم حذف ${deleted.size} رسالة.`);
+    }
+
+    if ([
+      "kick", "ban", "timeout", "untimeout", "unban", "warn"
+    ].includes(commandName)) {
+      const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const why = interaction.options.getString("reason") || "لم يُذكر سبب";
+
+      if (commandName === "unban") {
+        await guild.members.unban(id, why);
+        return reply("✅ تم فك الحظر.");
+      }
+
+      const targetMember = await guild.members.fetch(id).catch(() => null);
+
+      if (!targetMember) return reply("❌ لم أجد العضو.");
+
+      if (targetMember.id === interaction.user.id) {
+        return reply("❌ لا يمكنك تطبيق هذا الإجراء على نفسك.");
+      }
+
+      if (!targetMember.manageable && commandName !== "warn") {
+        return reply("❌ رتبة البوت يجب أن تكون أعلى من رتبة العضو.");
+      }
+
+      if (commandName === "kick") await targetMember.kick(why);
+      if (commandName === "ban") await targetMember.ban({ reason: why });
+      if (commandName === "untimeout") await targetMember.timeout(null, why);
+
+      if (commandName === "timeout") {
+        const minutes = Number(interaction.options.getString("minutes"));
+
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 40320) {
+          return reply("❌ المدة يجب أن تكون من دقيقة إلى 40320 دقيقة.");
+        }
+
+        await targetMember.timeout(minutes * 60000, why);
+      }
+
+      if (commandName === "warn") {
+        return reply(
+          `⚠️ تحذير لـ ${targetMember.user.tag}\nالسبب: ${why}\nملاحظة: هذا الإصدار لا يحفظ التحذيرات في قاعدة بيانات.`
+        );
+      }
+
+      return reply(`✅ تم تنفيذ ${commandName} على ${targetMember.user.tag}.`);
+    }
+
+    if (commandName === "nick") {
+      const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const nickname = interaction.options.getString("nickname");
+      const m = await guild.members.fetch(id);
+
+      await m.setNickname(nickname);
+      return reply("✅ تم تغيير اللقب.");
+    }
+
+    if (commandName === "addrole" || commandName === "removerole") {
+      const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const roleId = interaction.options.getString("role").replace(/[<@&>]/g, "");
+      const m = await guild.members.fetch(id);
+      const role = guild.roles.cache.get(roleId);
+
+      if (!role) return reply("❌ لم أجد الرتبة.");
+
+      if (
+        role.managed ||
+        role.position >= guild.members.me.roles.highest.position
+      ) {
+        return reply("❌ لا يستطيع البوت إدارة هذه الرتبة.");
+      }
+
+      if (commandName === "addrole") await m.roles.add(role);
+      else await m.roles.remove(role);
+
+      return reply("✅ تم تحديث الرتب.");
+    }
+
+    if (commandName === "announce" || commandName === "say") {
+      const message = interaction.options.getString("message");
+      await interaction.channel.send({ content: message });
+      return reply("✅ تم إرسال الرسالة.");
+    }
+
+    if (commandName === "embed") {
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setDescription(interaction.options.getString("message"));
+
+      await interaction.channel.send({ embeds: [embed] });
+      return reply("✅ تم إرسال Embed.");
+    }
+
+    if (commandName === "poll") {
+      const question = interaction.options.getString("question");
+
+      const poll = await interaction.channel.send(
+        `📊 **${question}**\n👍 = نعم\n👎 = لا`
+      );
+
+      await poll.react("👍");
+      await poll.react("👎");
+
+      return reply("✅ تم إنشاء التصويت.");
+    }
+
+    if (commandName === "report") {
+      return reply(
+        "📩 تم استلام البلاغ محليًا. ربطه بروم الإدارة يحتاج إعداد REPORT_CHANNEL_ID."
+      );
+    }
+
+    if (commandName === "coinflip") {
+      return reply(Math.random() < 0.5 ? "🪙 صورة!" : "🪙 كتابة!");
+    }
+
+    if (commandName === "roll") {
+      return reply(`🎲 النتيجة: ${Math.floor(Math.random() * 6) + 1}`);
+    }
+
+    if (commandName === "choose") {
+      return reply(
+        Math.random() < 0.5
+          ? interaction.options.getString("first")
+          : interaction.options.getString("second")
+      );
+    }
+
+    if (commandName === "8ball") {
+      const answers = [
+        "نعم بالتأكيد!",
+        "لا أعتقد ذلك.",
+        "ربما!",
+        "اسألني لاحقًا.",
+        "مستحيل!"
+      ];
+
+      return reply(answers[Math.floor(Math.random() * answers.length)]);
+    }
+
+    if (commandName === "joke") {
+      return reply("😂 لماذا الكمبيوتر بردان؟ لأنه فاتح الويندوز!");
+    }
+
+    if (commandName === "quote") {
+      return reply("💪 النجاح يحتاج صبرًا واستمرارًا، لا استسلامًا.");
+    }
+
+    if (commandName === "support") {
+      return reply("🛡️ VEX Guard — للمساعدة، تواصل مع إدارة السيرفر.");
+    }
+
+    if (commandName === "hug" || commandName === "ship") {
+      return reply("💙 انشروا المحبة والاحترام بين أعضاء السيرفر!");
+    }
+
+    if ([
+      "deafen", "undeafen", "move", "disconnect"
+    ].includes(commandName)) {
+      const id = interaction.options.getString("user").replace(/[<@!>]/g, "");
+      const m = await guild.members.fetch(id);
+
+      if (!m.voice.channel) {
+        return reply("❌ العضو ليس في روم صوتي.");
+      }
+
+      if (commandName === "deafen") await m.voice.setDeaf(true);
+      if (commandName === "undeafen") await m.voice.setDeaf(false);
+      if (commandName === "disconnect") await m.voice.disconnect();
+
+      if (commandName === "move") {
+        if (!member.voice.channel) {
+          return reply("❌ ادخل رومًا صوتيًا أولًا.");
+        }
+
+        await m.voice.setChannel(member.voice.channel);
+      }
+
+      return reply("✅ تم تنفيذ الإجراء الصوتي.");
+    }
+
+    if (commandName === "remind") {
+      return reply(
+        "⏰ تم تسجيل طلب التذكير، لكن التذكير التلقائي يحتاج إضافة نظام تخزين ومؤقتات."
+      );
+    }
+
+    return reply(
+      "⚙️ هذا الأمر مسجل، لكن وظيفته تحتاج استكمالًا في هذا الإصدار."
+    );
   } catch (error) {
-    console.error(`❌ خطأ في الأمر ${i.commandName || i.customId}:`, error);
-    const message = "❌ حدث خطأ أثناء تنفيذ الطلب. تحقق من صلاحيات البوت.";
+    console.error(`خطأ في /${commandName}:`, error);
 
-    if (i.isRepliable() && !i.replied && !i.deferred) {
-      await i.reply({ content: message, ephemeral: true }).catch(() => {});
+    const message = "❌ حدث خطأ. تأكد من صلاحيات البوت وترتيب الرتب.";
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({
+        content: message,
+        ephemeral: true
+      }).catch(() => {});
+    } else {
+      await interaction.reply({
+        content: message,
+        ephemeral: true
+      }).catch(() => {});
     }
   }
 });
 
-bot.once("ready", () => {
-  console.log(`✅ VEX Guard متصل باسم ${bot.user.tag}`);
-  console.log(`📡 البنق: ${bot.ws.ping}ms`);
-});
+async function main() {
+  try {
+    console.log("1️⃣ بدأ تشغيل VEX Guard");
+    console.log("2️⃣ تجهيز الأوامر...");
+    console.log(`📋 عدد الأوامر: ${commands.length}`);
 
-async function start() {
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-  const route = Routes.applicationCommands(CLIENT_ID);
+    await registerCommands();
 
-  console.log("1️⃣ بدأ تشغيل VEX Guard");
-  console.log("2️⃣ تجهيز الأوامر...");
-
-  if (slashCommands.length !== 50) {
-    throw new Error(`عدد الأوامر غير صحيح: ${slashCommands.length}`);
+    await client.login(TOKEN);
+  } catch (error) {
+    console.error("❌ تعذّر تشغيل البوت:", error.message);
+    process.exitCode = 1;
   }
-
-  const body = slashCommands.map(command => {
-    const data = command.toJSON();
-
-    if (data.options) {
-      data.options.sort((a, b) =>
-        Number(Boolean(b.required)) - Number(Boolean(a.required))
-      );
-    }
-
-    return data;
-  });
-
-  console.log(`3️⃣ جاري تسجيل ${body.length} أمرًا في Discord...`);
-  await rest.put(route, { body });
-
-  console.log("4️⃣ تم تسجيل الأوامر بنجاح.");
-  console.log("5️⃣ جاري تسجيل دخول البوت...");
-
-  await bot.login(TOKEN);
-  console.log("6️⃣ تم قبول تسجيل الدخول. البوت سيبقى يعمل ما دام متصلًا.");
 }
 
-start().catch(error => {
-  console.error("❌ فشل تشغيل VEX Guard:");
-  console.error(error);
-  process.exit(1);
+client.on("error", error => {
+  console.error("Discord client error:", error);
 });
+
+process.on("unhandledRejection", error => {
+  console.error("Unhandled rejection:", error);
+});
+
+main();
