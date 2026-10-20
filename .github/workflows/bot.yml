@@ -17,7 +17,9 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install discord.js
+        run: |
+          npm init -y
+          npm install discord.js
 
       - name: Start VEX Guard
         run: node index.js
