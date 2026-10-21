@@ -37,6 +37,15 @@ const client = new Client({
   ]
 });
 
+// منع توقف البوت بسبب أخطاء غير متوقعة
+client.on("error", error => {
+  console.error("Discord client error:", error);
+});
+
+process.on("unhandledRejection", error => {
+  console.error("Unhandled promise rejection:", error);
+});
+
 // ==================== قائمة الأوامر ====================
 
 const definitions = [
@@ -322,9 +331,7 @@ const commands = definitions.map(([name, description, kind, permission]) => {
   }
 
   return builder.toJSON();
-});
-
-// ==================== أدوات مساعدة ====================
+});// ==================== أدوات مساعدة ====================
 
 const pick = array => array[Math.floor(Math.random() * array.length)];
 
@@ -357,46 +364,12 @@ function isTicketChannel(channel) {
     channel.type === ChannelType.GuildText &&
     channel.topic?.startsWith("ticket-owner:")
   );
-}const TICKET_TYPES = {
-  support: {
-    label: "دعم فني",
-    emoji: "🛠️",
-    slug: "support",
-    description: "للمساعدة وحل المشاكل"
-  },
-  girl: {
-    label: "توثيق بنت",
-    emoji: "👩",
-    slug: "girl",
-    description: "لطلب توثيق بنت"
-  },
-  creator: {
-    label: "توثيق صانع محتوى",
-    emoji: "🎬",
-    slug: "creator",
-    description: "لطلب توثيق صانع محتوى"
-  },
-  partnership: {
-    label: "شراكة",
-    emoji: "🤝",
-    slug: "partnership",
-    description: "لطلب شراكة مع السيرفر"
-  }
-};
+}
 
-async function createTicket(interaction, typeKey) {
+async function createTicket(interaction) {
   if (!interaction.guild) {
     return interaction.reply({
-      content: "❌ هذا النظام يعمل داخل السيرفر فقط.",
-      ephemeral: true
-    });
-  }
-
-  const type = TICKET_TYPES[typeKey];
-
-  if (!type) {
-    return interaction.reply({
-      content: "❌ نوع التكت غير صحيح.",
+      content: "❌ هذا الأمر يعمل داخل السيرفر فقط.",
       ephemeral: true
     });
   }
@@ -405,12 +378,12 @@ async function createTicket(interaction, typeKey) {
 
   const existing = guild.channels.cache.find(channel =>
     channel.type === ChannelType.GuildText &&
-    channel.topic?.startsWith(`ticket-owner:${interaction.user.id}`)
+    channel.topic === `ticket-owner:${interaction.user.id}`
   );
 
   if (existing) {
     return interaction.reply({
-      content: `❌ عندك تكت مفتوح بالفعل: ${existing}`,
+      content: `عندك تكت مفتوح بالفعل: ${existing}`,
       ephemeral: true
     });
   }
@@ -431,7 +404,7 @@ async function createTicket(interaction, typeKey) {
   const safeName = interaction.user.username
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "")
-    .slice(0, 35) || "member";
+    .slice(0, 70) || "member";
 
   const overwrites = [
     {
@@ -470,65 +443,44 @@ async function createTicket(interaction, typeKey) {
     });
   }
 
-  try {
-    const channel = await guild.channels.create({
-      name: `ticket-${type.slug}-${safeName}`.slice(0, 100),
-      type: ChannelType.GuildText,
-      topic: `ticket-owner:${interaction.user.id}`,
-      parent: TICKET_CATEGORY_ID || undefined,
-      permissionOverwrites: overwrites
-    });
+  const channel = await guild.channels.create({
+    name: `ticket-${safeName}`,
+    type: ChannelType.GuildText,
+    topic: `ticket-owner:${interaction.user.id}`,
+    parent: TICKET_CATEGORY_ID || undefined,
+    permissionOverwrites: overwrites
+  });
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("ticket:close")
-        .setLabel("إغلاق التكت")
-        .setEmoji("🔒")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId("ticket:claim")
-        .setLabel("استلام التكت")
-        .setEmoji("🛠️")
-        .setStyle(ButtonStyle.Success)
-    );
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("ticket:close")
+      .setLabel("إغلاق التكت")
+      .setEmoji("🔒")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("ticket:claim")
+      .setLabel("استلام التكت")
+      .setEmoji("🛠️")
+      .setStyle(ButtonStyle.Success)
+  );
 
-    const embed = new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setTitle(`${type.emoji} ${type.label}`)
-      .setDescription(
-        `مرحبًا ${interaction.user} 👋\n\n` +
-        `تم فتح طلبك في قسم **${type.label}**.\n` +
-        `${type.description}.\n\n` +
-        "اكتب تفاصيل طلبك وانتظر فريق الإدارة."
-      )
-      .setFooter({ text: SERVER_NAME })
-      .setTimestamp();
+  await channel.send({
+    content:
+      `مرحبًا ${interaction.user} 👋\n` +
+      `أهلًا بك في دعم **${SERVER_NAME}**.\n` +
+      "اكتب تفاصيل طلبك وسيقوم فريق الدعم بمساعدتك.",
+    components: [row]
+  });
 
-    await channel.send({
-      content: `${interaction.user}`,
-      embeds: [embed],
-      components: [row]
-    });
-
-    return interaction.editReply({
-      content: `✅ تم فتح تكت **${type.label}** بنجاح: ${channel}`
-    });
-  } catch (error) {
-    console.error("خطأ في إنشاء التكت:", error);
-
-    return interaction.editReply({
-      content: "❌ تعذر إنشاء التكت. تحقق من صلاحيات البوت وإعدادات التصنيف."
-    });
-  }
+  return interaction.editReply({
+    content: `✅ تم فتح تكتك بنجاح: ${channel}`
+  });
 }
 
 // ==================== تسجيل الأوامر ====================
 
 async function registerCommands() {
-  const rest = new REST({
-    version: "10",
-    timeout: 120000
-  }).setToken(TOKEN);
+  const rest = new REST({ version: "10", timeout: 120000 }).setToken(TOKEN);
 
   await rest.put(
     Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
@@ -540,7 +492,7 @@ async function registerCommands() {
 
 // ==================== تشغيل البوت ====================
 
-client.once("ready", () => {
+client.once("clientReady", () => {
   console.log(`🛡️ ${client.user.tag} يعمل الآن في ${SERVER_NAME}.`);
   client.user.setActivity("Mr Bit Empire | Support");
 });
@@ -549,56 +501,11 @@ client.once("ready", () => {
 
 client.on("interactionCreate", async interaction => {
   try {
-    // ---------- قائمة أنواع التكت ----------
-
-    if (
-      interaction.isStringSelectMenu() &&
-      interaction.customId === "ticket:type"
-    ) {
-      return await createTicket(interaction, interaction.values[0]);
-    }
-
     // ---------- أزرار التكت ----------
 
     if (interaction.isButton()) {
       if (interaction.customId === "ticket:create") {
-        const menu = new StringSelectMenuBuilder()
-          .setCustomId("ticket:type")
-          .setPlaceholder("🎫 اختر نوع التكت")
-          .addOptions(
-            {
-              label: "دعم فني",
-              value: "support",
-              emoji: "🛠️",
-              description: "للمساعدة وحل المشاكل"
-            },
-            {
-              label: "توثيق بنت",
-              value: "girl",
-              emoji: "👩",
-              description: "لطلب توثيق بنت"
-            },
-            {
-              label: "توثيق صانع محتوى",
-              value: "creator",
-              emoji: "🎬",
-              description: "لطلب توثيق صانع محتوى"
-            },
-            {
-              label: "شراكة",
-              value: "partnership",
-              emoji: "🤝",
-              description: "لطلب شراكة مع السيرفر"
-            }
-          );
-
-        return interaction.reply({
-          content: "🎫 **اختر نوع التكت الذي تريد فتحه:**",
-          components: [
-            new ActionRowBuilder().addComponents(menu)
-          ],
-          ephemeral: true
-        });
+        return await createTicket(interaction);
       }
 
       if (interaction.customId === "ticket:close") {
@@ -678,10 +585,7 @@ client.on("interactionCreate", async interaction => {
         ].join("\n\n")
       );
 
-      return interaction.reply({
-        embeds: [embed],
-        ephemeral: true
-      });
+      return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     if (name === "ping") {
@@ -707,12 +611,9 @@ client.on("interactionCreate", async interaction => {
 
     if (name === "userinfo") {
       const user = member || interaction.user;
-
       const embed = makeEmbed(
         "👤 معلومات العضو",
-        `**الاسم:** ${user.tag}\n` +
-        `**المعرف:** ${user.id}\n` +
-        `**تاريخ إنشاء الحساب:** <t:${Math.floor(user.createdTimestamp / 1000)}:F>`
+        `**الاسم:** ${user.tag}\n**المعرف:** ${user.id}\n**تاريخ إنشاء الحساب:** <t:${Math.floor(user.createdTimestamp / 1000)}:F>`
       );
 
       return interaction.reply({ embeds: [embed] });
@@ -733,9 +634,7 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "membercount") {
-      return interaction.reply(
-        `👥 عدد أعضاء السيرفر: **${interaction.guild.memberCount}**`
-      );
+      return interaction.reply(`👥 عدد أعضاء السيرفر: **${interaction.guild.memberCount}**`);
     }
 
     if (name === "roles") {
@@ -744,7 +643,6 @@ client.on("interactionCreate", async interaction => {
         .map(role => role.name);
 
       const output = roles.join("، ").slice(0, 1800) || "لا توجد رتب.";
-
       return interaction.reply(`🎭 **رتب السيرفر:**\n${output}`);
     }
 
@@ -755,9 +653,7 @@ client.on("interactionCreate", async interaction => {
         embeds: [
           makeEmbed(
             "📍 معلومات الروم",
-            `**الاسم:** ${channel.name}\n` +
-            `**المعرف:** ${channel.id}\n` +
-            `**النوع:** ${channel.type}`
+            `**الاسم:** ${channel.name}\n**المعرف:** ${channel.id}\n**النوع:** ${channel.type}`
           )
         ]
       });
@@ -771,150 +667,87 @@ client.on("interactionCreate", async interaction => {
       }
 
       return interaction.reply(icon);
-    }
-
-    // ---------- أوامر الإدارة ----------
+    }    // ---------- أوامر الإدارة ----------
 
     if (name === "warn") {
-      if (!member) {
-        return interaction.reply({
-          content: "❌ حدد عضوًا.",
-          ephemeral: true
-        });
-      }
+      if (!member) return interaction.reply({ content: "❌ حدد عضوًا.", ephemeral: true });
 
       try {
-        await member.send(
-          `⚠️ تلقيت تحذيرًا في ${SERVER_NAME}.\nالسبب: ${reason}`
-        );
+        await member.send(`⚠️ تلقيت تحذيرًا في ${SERVER_NAME}.\nالسبب: ${reason}`);
       } catch {}
 
-      return interaction.reply(
-        `⚠️ تم تسجيل التحذير وإبلاغ ${member}.\n**السبب:** ${reason}`
-      );
+      return interaction.reply(`⚠️ تم تسجيل التحذير وإبلاغ ${member}.\n**السبب:** ${reason}`);
     }
 
     if (name === "kick") {
-      const target = await interaction.guild.members
-        .fetch(member.id)
-        .catch(() => null);
+      const target = await interaction.guild.members.fetch(member.id).catch(() => null);
 
       if (!target) {
-        return interaction.reply({
-          content: "❌ لم أجد العضو.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لم أجد العضو.", ephemeral: true });
       }
 
       if (!target.kickable) {
-        return interaction.reply({
-          content: "❌ لا أستطيع طرد هذا العضو. تحقق من صلاحياتي وترتيب الرتب.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لا أستطيع طرد هذا العضو. تحقق من صلاحياتي وترتيب الرتب.", ephemeral: true });
       }
 
       await target.kick(reason);
-
-      return interaction.reply(
-        `👢 تم طرد **${member.tag}**.\n**السبب:** ${reason}`
-      );
+      return interaction.reply(`👢 تم طرد **${member.tag}**.\n**السبب:** ${reason}`);
     }
 
     if (name === "ban") {
-      const target = await interaction.guild.members
-        .fetch(member.id)
-        .catch(() => null);
+      const target = await interaction.guild.members.fetch(member.id).catch(() => null);
 
       if (!target) {
-        return interaction.reply({
-          content: "❌ لم أجد العضو داخل السيرفر.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لم أجد العضو داخل السيرفر.", ephemeral: true });
       }
 
       if (!target.bannable) {
-        return interaction.reply({
-          content: "❌ لا أستطيع حظر هذا العضو. تحقق من صلاحياتي وترتيب الرتب.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لا أستطيع حظر هذا العضو. تحقق من صلاحياتي وترتيب الرتب.", ephemeral: true });
       }
 
       await target.ban({ reason });
-
-      return interaction.reply(
-        `🔨 تم حظر **${member.tag}**.\n**السبب:** ${reason}`
-      );
+      return interaction.reply(`🔨 تم حظر **${member.tag}**.\n**السبب:** ${reason}`);
     }
 
     if (name === "unban") {
       const userId = interaction.options.getString("user_id").trim();
 
       if (!/^\d{17,20}$/.test(userId)) {
-        return interaction.reply({
-          content: "❌ أدخل معرف مستخدم صحيحًا.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ أدخل معرف مستخدم صحيحًا.", ephemeral: true });
       }
 
-      await interaction.guild.members.unban(
-        userId,
-        "فك الحظر بواسطة VEX Guard"
-      );
-
-      return interaction.reply(
-        `✅ تم فك الحظر عن صاحب المعرف \`${userId}\`.`
-      );
+      await interaction.guild.members.unban(userId, "فك الحظر بواسطة VEX Guard");
+      return interaction.reply(`✅ تم فك الحظر عن صاحب المعرف \`${userId}\`.`);
     }
 
     if (name === "timeout") {
-      const target = await interaction.guild.members
-        .fetch(member.id)
-        .catch(() => null);
-
+      const target = await interaction.guild.members.fetch(member.id).catch(() => null);
       const minutes = interaction.options.getInteger("minutes");
 
       if (!target) {
-        return interaction.reply({
-          content: "❌ لم أجد العضو.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لم أجد العضو.", ephemeral: true });
       }
 
       if (!target.moderatable) {
-        return interaction.reply({
-          content: "❌ لا أستطيع إعطاء هذا العضو مهلة.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لا أستطيع إعطاء هذا العضو مهلة.", ephemeral: true });
       }
 
       await target.timeout(minutes * 60 * 1000, reason);
-
-      return interaction.reply(
-        `⏳ تم إعطاء ${member} مهلة لمدة **${minutes} دقيقة**.\n**السبب:** ${reason}`
-      );
+      return interaction.reply(`⏳ تم إعطاء ${member} مهلة لمدة **${minutes} دقيقة**.\n**السبب:** ${reason}`);
     }
 
     if (name === "untimeout") {
-      const target = await interaction.guild.members
-        .fetch(member.id)
-        .catch(() => null);
+      const target = await interaction.guild.members.fetch(member.id).catch(() => null);
 
       if (!target) {
-        return interaction.reply({
-          content: "❌ لم أجد العضو.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لم أجد العضو.", ephemeral: true });
       }
 
       if (!target.moderatable) {
-        return interaction.reply({
-          content: "❌ لا أستطيع إزالة المهلة عن هذا العضو.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لا أستطيع إزالة المهلة عن هذا العضو.", ephemeral: true });
       }
 
       await target.timeout(null);
-
       return interaction.reply(`✅ تمت إزالة المهلة عن ${member}.`);
     }
 
@@ -932,17 +765,11 @@ client.on("interactionCreate", async interaction => {
       const seconds = interaction.options.getInteger("amount");
 
       if (!interaction.channel.setRateLimitPerUser) {
-        return interaction.reply({
-          content: "❌ لا يمكن ضبط البطء في هذا الروم.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لا يمكن ضبط البطء في هذا الروم.", ephemeral: true });
       }
 
       await interaction.channel.setRateLimitPerUser(seconds);
-
-      return interaction.reply(
-        `🐢 تم ضبط بطء الروم على **${seconds} ثانية**.`
-      );
+      return interaction.reply(`🐢 تم ضبط بطء الروم على **${seconds} ثانية**.`);
     }
 
     if (name === "lock" || name === "unlock") {
@@ -972,48 +799,27 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "nickname") {
-      const target = await interaction.guild.members
-        .fetch(member.id)
-        .catch(() => null);
-
+      const target = await interaction.guild.members.fetch(member.id).catch(() => null);
       const nickname = interaction.options.getString("nickname");
 
       if (!target) {
-        return interaction.reply({
-          content: "❌ لم أجد العضو.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لم أجد العضو.", ephemeral: true });
       }
 
       await target.setNickname(nickname);
-
-      return interaction.reply(
-        `✅ تم تغيير لقب ${member} إلى **${nickname}**.`
-      );
+      return interaction.reply(`✅ تم تغيير لقب ${member} إلى **${nickname}**.`);
     }
 
     if (name === "roleadd" || name === "roleremove") {
-      const target = await interaction.guild.members
-        .fetch(member.id)
-        .catch(() => null);
-
+      const target = await interaction.guild.members.fetch(member.id).catch(() => null);
       const role = interaction.options.getRole("role");
 
       if (!target) {
-        return interaction.reply({
-          content: "❌ لم أجد العضو.",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ لم أجد العضو.", ephemeral: true });
       }
 
-      if (
-        role.managed ||
-        role.position >= interaction.guild.members.me.roles.highest.position
-      ) {
-        return interaction.reply({
-          content: "❌ لا أستطيع تعديل هذه الرتبة بسبب ترتيب الرتب أو لأنها مُدارة.",
-          ephemeral: true
-        });
+      if (role.managed || role.position >= interaction.guild.members.me.roles.highest.position) {
+        return interaction.reply({ content: "❌ لا أستطيع تعديل هذه الرتبة بسبب ترتيب الرتب أو لأنها مُدارة.", ephemeral: true });
       }
 
       if (name === "roleadd") {
@@ -1022,7 +828,6 @@ client.on("interactionCreate", async interaction => {
       }
 
       await target.roles.remove(role);
-
       return interaction.reply(`✅ تمت إزالة رتبة ${role} من ${member}.`);
     }
 
@@ -1110,9 +915,7 @@ client.on("interactionCreate", async interaction => {
         return interaction.reply(`✅ تمت إضافة ${target} إلى التكت.`);
       }
 
-      await interaction.channel.permissionOverwrites
-        .delete(target.id)
-        .catch(() => null);
+      await interaction.channel.permissionOverwrites.delete(target.id).catch(() => null);
 
       return interaction.reply(`✅ تمت إزالة صلاحيات ${target} من التكت.`);
     }
@@ -1132,22 +935,15 @@ client.on("interactionCreate", async interaction => {
         });
       }
 
-      return interaction.reply(
-        `🛠️ تم استلام التكت بواسطة ${interaction.user}.`
-      );
+      return interaction.reply(`🛠️ تم استلام التكت بواسطة ${interaction.user}.`);
     }
 
     // ---------- أدوات الرسائل ----------
 
     if (name === "say") {
       const text = interaction.options.getString("text");
-
       await interaction.channel.send({ content: text });
-
-      return interaction.reply({
-        content: "✅ تم إرسال الرسالة.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "✅ تم إرسال الرسالة.", ephemeral: true });
     }
 
     if (name === "poll") {
@@ -1160,10 +956,7 @@ client.on("interactionCreate", async interaction => {
       await message.react("👍");
       await message.react("👎");
 
-      return interaction.reply({
-        content: "✅ تم إنشاء التصويت.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "✅ تم إنشاء التصويت.", ephemeral: true });
     }
 
     if (name === "announce") {
@@ -1175,10 +968,7 @@ client.on("interactionCreate", async interaction => {
         ]
       });
 
-      return interaction.reply({
-        content: "✅ تم إرسال الإعلان.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "✅ تم إرسال الإعلان.", ephemeral: true });
     }
 
     if (name === "embed") {
@@ -1189,10 +979,7 @@ client.on("interactionCreate", async interaction => {
         embeds: [makeEmbed(title, description)]
       });
 
-      return interaction.reply({
-        content: "✅ تم إرسال Embed.",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "✅ تم إرسال Embed.", ephemeral: true });
     }
 
     if (name === "report") {
@@ -1209,10 +996,7 @@ client.on("interactionCreate", async interaction => {
 
       return interaction.reply({
         embeds: [
-          makeEmbed(
-            "💡 اقتراح جديد",
-            `**من:** ${interaction.user}\n**الاقتراح:** ${text}`
-          )
+          makeEmbed("💡 اقتراح جديد", `**من:** ${interaction.user}\n**الاقتراح:** ${text}`)
         ]
       });
     }
@@ -1231,9 +1015,7 @@ client.on("interactionCreate", async interaction => {
       const text = interaction.options.getString("text");
 
       return interaction.reply({
-        content:
-          `📝 تذكيرك محفوظ في هذه الرسالة:\n${text}\n\n` +
-          "ملاحظة: هذا الأمر لا يرسل تذكيرًا تلقائيًا لاحقًا.",
+        content: `📝 تذكيرك محفوظ في هذه الرسالة:\n${text}\n\nملاحظة: هذا الأمر لا يرسل تذكيرًا تلقائيًا لاحقًا.`,
         ephemeral: true
       });
     }
@@ -1248,14 +1030,10 @@ client.on("interactionCreate", async interaction => {
         ],
         ephemeral: true
       });
-    }
-
-    // ---------- أوامر الألعاب والترفيه ----------
+    }    // ---------- أوامر الألعاب والترفيه ----------
 
     if (name === "roll" || name === "number") {
-      return interaction.reply(
-        `🎲 الرقم العشوائي: **${Math.floor(Math.random() * 100) + 1}**`
-      );
+      return interaction.reply(`🎲 الرقم العشوائي: **${Math.floor(Math.random() * 100) + 1}**`);
     }
 
     if (name === "coinflip") {
@@ -1327,7 +1105,7 @@ client.on("interactionCreate", async interaction => {
       const b = Math.floor(Math.random() * 6) + 1;
 
       return interaction.reply(
-        `🎲 النرد الأول: **${a}**\nالنرد الثاني: **${b}**\nالمجموع: **${a + b}**`
+        `🎲 النرد الأول: **${a}**\n🎲 النرد الثاني: **${b}**\nالمجموع: **${a + b}**`
       );
     }
 
@@ -1419,21 +1197,15 @@ client.on("interactionCreate", async interaction => {
       const word = pick(["DISCORD", "GAMING", "BRAWL", "FORTNITE", "MINECRAFT"]);
       const scrambled = word.split("").sort(() => Math.random() - 0.5).join("");
 
-      return interaction.reply(
-        `🔤 رتّب الحروف لتكتشف الكلمة:\n**${scrambled}**`
-      );
+      return interaction.reply(`🔤 رتّب الحروف لتكتشف الكلمة:\n**${scrambled}**`);
     }
 
     if (name === "memory") {
-      return interaction.reply(
-        "🧠 تحدي ذاكرة: احفظ هذه الرموز لمدة 10 ثوانٍ: 🍎 🚀 ⭐ 🐺 💎"
-      );
+      return interaction.reply("🧠 تحدي ذاكرة: احفظ هذه الرموز لمدة 10 ثوانٍ: 🍎 🚀 ⭐ 🐺 💎");
     }
 
     if (name === "reaction") {
-      return interaction.reply(
-        "⚡ تحدي رد الفعل: عندما ترى رسالة جديدة، حاول أن تكون من أوائل من يردون عليها!"
-      );
+      return interaction.reply("⚡ تحدي رد الفعل: عندما ترى رسالة جديدة، حاول أن تكون من أوائل من يردون عليها!");
     }
 
     if (name === "fasttype") {
@@ -1441,9 +1213,7 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "higherlower") {
-      return interaction.reply(
-        `📈 الرقم الحالي: **${Math.floor(Math.random() * 100) + 1}**. هل الرقم التالي أعلى أم أقل؟`
-      );
+      return interaction.reply(`📈 الرقم الحالي: **${Math.floor(Math.random() * 100) + 1}**. هل الرقم التالي أعلى أم أقل؟`);
     }
 
     if (name === "blackjack") {
@@ -1452,15 +1222,11 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "lottery") {
-      return interaction.reply(
-        `🎟️ الفائز العشوائي اليوم: ${interaction.guild.members.cache.random()?.user || interaction.user}`
-      );
+      return interaction.reply(`🎟️ الفائز العشوائي اليوم: ${interaction.guild.members.cache.random()?.user || interaction.user}`);
     }
 
     if (name === "roulette") {
-      return interaction.reply(
-        `🎡 توقفت العجلة عند: **${Math.floor(Math.random() * 37)}**`
-      );
+      return interaction.reply(`🎡 توقفت العجلة عند: **${Math.floor(Math.random() * 37)}**`);
     }
 
     if (name === "emojiquiz") {
@@ -1472,15 +1238,11 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "capitals") {
-      return interaction.reply(
-        "🌍 سؤال: ما عاصمة الجزائر؟ الجواب: الجزائر العاصمة."
-      );
+      return interaction.reply("🌍 سؤال: ما عاصمة الجزائر؟ الجواب: الجزائر العاصمة.");
     }
 
     if (name === "animalquiz") {
-      return interaction.reply(
-        "🐬 معلومة: الدلافين ثدييات وليست أسماكًا."
-      );
+      return interaction.reply("🐬 معلومة: الدلافين ثدييات وليست أسماكًا.");
     }
 
     if (name === "trivia" || name === "quiz") {
@@ -1492,21 +1254,15 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "footballquiz") {
-      return interaction.reply(
-        "⚽ سؤال: كم لاعبًا من الفريق الواحد يبدأ المباراة داخل الملعب؟ الجواب: 11 لاعبًا."
-      );
+      return interaction.reply("⚽ سؤال: كم لاعبًا من الفريق الواحد يبدأ المباراة داخل الملعب؟ الجواب: 11 لاعبًا.");
     }
 
     if (name === "animequiz") {
-      return interaction.reply(
-        "🍥 سؤال أنمي: ما اسم بطل أنمي Naruto؟ الجواب: ناروتو أوزوماكي."
-      );
+      return interaction.reply("🍥 سؤال أنمي: ما اسم بطل أنمي Naruto؟ الجواب: ناروتو أوزوماكي.");
     }
 
     if (name === "gamingquiz") {
-      return interaction.reply(
-        "🎮 سؤال ألعاب: ما اسم الشركة المطورة للعبة Minecraft؟ الجواب: Mojang."
-      );
+      return interaction.reply("🎮 سؤال ألعاب: ما اسم الشركة المطورة للعبة Minecraft؟ الجواب: Mojang.");
     }
 
     if (name === "brawlstars") {
@@ -1526,39 +1282,27 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "minecraft") {
-      return interaction.reply(
-        "⛏️ تحدي ماينكرافت: ابنِ منزلًا صغيرًا باستخدام ثلاثة أنواع من الكتل."
-      );
+      return interaction.reply("⛏️ تحدي ماينكرافت: ابنِ منزلًا صغيرًا باستخدام ثلاثة أنواع من الكتل.");
     }
 
     if (name === "efootball") {
-      return interaction.reply(
-        "⚽ تحدي إي فوتبول: جرّب بناء هجمة باستخدام التمريرات القصيرة."
-      );
+      return interaction.reply("⚽ تحدي إي فوتبول: جرّب بناء هجمة باستخدام التمريرات القصيرة.");
     }
 
     if (name === "valorant") {
-      return interaction.reply(
-        "🎯 تحدي فالورانت: تدرب على التصويب والتحرك قبل دخول مباراة."
-      );
+      return interaction.reply("🎯 تحدي فالورانت: تدرب على التصويب والتحرك قبل دخول مباراة.");
     }
 
     if (name === "chess") {
-      return interaction.reply(
-        "♟️ نصيحة شطرنج: حاول السيطرة على وسط الرقعة وتطوير قطعك مبكرًا."
-      );
+      return interaction.reply("♟️ نصيحة شطرنج: حاول السيطرة على وسط الرقعة وتطوير قطعك مبكرًا.");
     }
 
     if (name === "wordchain") {
-      return interaction.reply(
-        "🔠 تحدي الكلمات: اكتب كلمة تبدأ بآخر حرف من كلمة «مدرسة»."
-      );
+      return interaction.reply("🔠 تحدي الكلمات: اكتب كلمة تبدأ بآخر حرف من كلمة «مدرسة».");
     }
 
     if (name === "wordle") {
-      return interaction.reply(
-        "🟩 كلمة اليوم التجريبية: حاول تخمين كلمة من خمسة أحرف!"
-      );
+      return interaction.reply("🟩 كلمة اليوم التجريبية: حاول تخمين كلمة من خمسة أحرف!");
     }
 
     if (name === "hangman") {
@@ -1566,21 +1310,15 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "leaderboard") {
-      return interaction.reply(
-        "🏆 لوحة المتصدرين التجريبية: لا توجد نقاط محفوظة بعد."
-      );
+      return interaction.reply("🏆 لوحة المتصدرين التجريبية: لا توجد نقاط محفوظة بعد.");
     }
 
     if (name === "daily") {
-      return interaction.reply(
-        "🎁 هذه مكافأة تجريبية فقط؛ لا توجد عملة أو نقاط محفوظة في قاعدة بيانات."
-      );
+      return interaction.reply("🎁 هذه مكافأة تجريبية فقط؛ لا توجد عملة أو نقاط محفوظة في قاعدة بيانات.");
     }
 
     if (name === "profile") {
-      return interaction.reply(
-        `👤 ملف اللاعب: ${interaction.user}\n**النقاط التجريبية:** 0`
-      );
+      return interaction.reply(`👤 ملف اللاعب: ${interaction.user}\n**النقاط التجريبية:** 0`);
     }
 
     if (name === "joke") {
@@ -1600,29 +1338,20 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "quote") {
-      return interaction.reply(
-        "✨ «النجاح هو الاستمرار في المحاولة والتعلم من الأخطاء.»"
-      );
+      return interaction.reply("✨ «النجاح هو الاستمرار في المحاولة والتعلم من الأخطاء.»");
     }
 
     if (name === "compliment") {
-      return interaction.reply(
-        `💙 ${member} شخص رائع، ووجوده يضيف جوًا جميلًا للسيرفر!`
-      );
+      return interaction.reply(`💙 ${member} شخص رائع، ووجوده يضيف جوًا جميلًا للسيرفر!`);
     }
 
     if (name === "roast") {
-      return interaction.reply(
-        `😂 مزحة خفيفة لـ ${member}: حتى الإنترنت ينتظر منك أن تتحرك أسرع!`
-      );
+      return interaction.reply(`😂 مزحة خفيفة لـ ${member}: حتى الإنترنت ينتظر منك أن تتحرك أسرع!`);
     }
 
     if (name === "rate") {
       const text = interaction.options.getString("text");
-
-      return interaction.reply(
-        `⭐ تقييم **${text}** للمرح فقط: **${Math.floor(Math.random() * 10) + 1}/10**`
-      );
+      return interaction.reply(`⭐ تقييم **${text}** للمرح فقط: **${Math.floor(Math.random() * 10) + 1}/10**`);
     }
 
     if (name === "ship") {
@@ -1635,51 +1364,35 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (name === "hug") {
-      return interaction.reply(
-        `🤗 ${interaction.user} يرسل تحية ودية إلى ${member}!`
-      );
+      return interaction.reply(`🤗 ${interaction.user} يرسل تحية ودية إلى ${member}!`);
     }
 
     if (name === "highfive") {
-      return interaction.reply(
-        `🖐️ ${interaction.user} يحيّي ${member} بالكف!`
-      );
+      return interaction.reply(`🖐️ ${interaction.user} يحيّي ${member} بالكف!`);
     }
 
     if (name === "slap") {
-      return interaction.reply(
-        `😂 مزحة بين الأصدقاء: ${interaction.user} يرسل حركة كرتونية مرحة إلى ${member}.`
-      );
+      return interaction.reply(`😂 مزحة بين الأصدقاء: ${interaction.user} يرسل حركة كرتونية مرحة إلى ${member}.`);
     }
 
     if (name === "meme") {
-      return interaction.reply(
-        "😂 فكرة ميم: عندما تقول «آخر مباراة» ثم تكتشف أن الوقت صار متأخرًا!"
-      );
+      return interaction.reply("😂 فكرة ميم: عندما تقول «آخر مباراة» ثم تكتشف أن الوقت صار متأخرًا!");
     }
 
     if (name === "cat") {
-      return interaction.reply(
-        "🐱 حقيقة: القطط تستخدم شواربها للمساعدة في تقدير المسافات."
-      );
+      return interaction.reply("🐱 حقيقة: القطط تستخدم شواربها للمساعدة في تقدير المسافات.");
     }
 
     if (name === "dog") {
-      return interaction.reply(
-        "🐶 حقيقة: حاسة الشم لدى الكلاب قوية جدًا."
-      );
+      return interaction.reply("🐶 حقيقة: حاسة الشم لدى الكلاب قوية جدًا.");
     }
 
     if (name === "advice") {
-      return interaction.reply(
-        "💡 نصيحة: لا تتردد في طلب المساعدة عندما تحتاج إليها."
-      );
+      return interaction.reply("💡 نصيحة: لا تتردد في طلب المساعدة عندما تحتاج إليها.");
     }
 
     if (name === "motivation") {
-      return interaction.reply(
-        "🔥 كل خطوة صغيرة تتعلم منها تقربك من هدفك. استمر!"
-      );
+      return interaction.reply("🔥 كل خطوة صغيرة تتعلم منها تقربك من هدفك. استمر!");
     }
 
     return interaction.reply({
@@ -1688,6 +1401,12 @@ client.on("interactionCreate", async interaction => {
     });
 
   } catch (error) {
+    // معالجة انتهاء مهلة التفاعل
+    if (error?.code === 10062 || error?.rawError?.code === 10062) {
+      console.warn("انتهت مهلة تفاعل Discord (10062).");
+      return;
+    }
+
     console.error("خطأ في تنفيذ الأمر:", error);
 
     const message = {
@@ -1697,8 +1416,12 @@ client.on("interactionCreate", async interaction => {
 
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(message).catch(() => {});
-    } else {
-      await interaction.reply(message).catch(() => {});
+    } else if (interaction.isRepliable()) {
+      await interaction.reply(message).catch(replyError => {
+        if (replyError?.code !== 10062) {
+          console.error("تعذر إرسال رسالة الخطأ:", replyError);
+        }
+      });
     }
   }
 });
