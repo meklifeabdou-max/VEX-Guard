@@ -10,7 +10,8 @@ const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 // ==================== إعدادات البوت ====================
