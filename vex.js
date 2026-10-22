@@ -152,7 +152,7 @@ const definitions = [
   ["reverse", "عكس النص", "text"],
   ["repeat", "تكرار النص", "text"],
   ["remind", "إنشاء تذكير نصي", "text"],
-  ["support", "معلومات الدعم", "none"]
+  ["invite", "عرض عدد دعوات عضو", "user"]
 ];
 
 // ==================== إنشاء أوامر Slash ====================
@@ -331,7 +331,9 @@ const commands = definitions.map(([name, description, kind, permission]) => {
   }
 
   return builder.toJSON();
-});// ==================== أدوات مساعدة ====================
+});
+
+// ==================== أدوات مساعدة ====================
 
 const pick = array => array[Math.floor(Math.random() * array.length)];
 
@@ -581,7 +583,7 @@ client.on("interactionCreate", async interaction => {
           "**الألعاب:** `/roll` `/coinflip` `/rps` `/guess` `/number` `/trivia` `/quiz` `/math` `/dice` `/slots` وغيرها.",
           "**الإدارة:** `/warn` `/kick` `/ban` `/unban` `/timeout` `/untimeout` `/clear` `/slowmode` `/lock` `/unlock` `/hide` `/show` `/nickname` `/roleadd` `/roleremove`",
           "**التكت:** `/ticket-panel` `/ticket-close` `/ticket-add` `/ticket-remove` `/ticket-claim`",
-          "**الأدوات:** `/say` `/poll` `/announce` `/embed` `/report` `/suggest` `/reverse` `/repeat` `/remind` `/support`"
+          "**الأدوات:** `/say` `/poll` `/announce` `/embed` `/report` `/suggest` `/reverse` `/repeat` `/remind` `/invite`"
         ].join("\n\n")
       );
 
@@ -667,7 +669,9 @@ client.on("interactionCreate", async interaction => {
       }
 
       return interaction.reply(icon);
-    }    // ---------- أوامر الإدارة ----------
+    }
+
+    // ---------- أوامر الإدارة ----------
 
     if (name === "warn") {
       if (!member) return interaction.reply({ content: "❌ حدد عضوًا.", ephemeral: true });
@@ -1020,17 +1024,26 @@ client.on("interactionCreate", async interaction => {
       });
     }
 
-    if (name === "support") {
+    // ---------- أمر الإنفايت Slash ----------
+
+    if (name === "invite") {
+      const target = member || interaction.user;
+
+      const count =
+        vexInviteCounts.get(interaction.guildId)?.get(target.id) || 0;
+
       return interaction.reply({
         embeds: [
           makeEmbed(
-            "🛠️ الدعم الفني",
-            "لفتح طلب دعم، استخدم لوحة التكت التي ينشئها الأمر `/ticket-panel`."
+            "Invite Statistics",
+            `**العضو:** ${target}\n**عدد الدعوات المسجلة:** ${count}`
           )
         ],
         ephemeral: true
       });
-    }    // ---------- أوامر الألعاب والترفيه ----------
+    }
+
+    // ---------- أوامر الألعاب والترفيه ----------
 
     if (name === "roll" || name === "number") {
       return interaction.reply(`🎲 الرقم العشوائي: **${Math.floor(Math.random() * 100) + 1}**`);
@@ -1425,6 +1438,7 @@ client.on("interactionCreate", async interaction => {
     }
   }
 });
+
 // =============== VEX GUARD INVITE SYSTEM ===============
 
 const vexInviteCache = new Map();
@@ -1533,6 +1547,7 @@ client.on("messageCreate", async message => {
 });
 
 // =============== END INVITE SYSTEM ===============
+
 // ==================== تسجيل الأوامر ثم تشغيل البوت ====================
 
 (async () => {
