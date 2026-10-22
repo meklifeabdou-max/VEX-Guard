@@ -1425,7 +1425,114 @@ client.on("interactionCreate", async interaction => {
     }
   }
 });
+// =============== VEX GUARD INVITE SYSTEM ===============
 
+const vexInviteCache = new Map();
+const vexInviteCounts = new Map();
+
+async function vexLoadInvites(guild) {
+  try {
+    const invites = await guild.invites.fetch();
+
+    vexInviteCache.set(
+      guild.id,
+      new Map(
+        invites.map(invite => [invite.code, invite.uses || 0])
+      )
+    );
+  } catch (error) {
+    console.log("تعذر جلب الدعوات:", error.message);
+  }
+}
+
+// تحميل الدعوات عند تشغيل البوت
+client.on("ready", async () => {
+  for (const guild of client.guilds.cache.values()) {
+    await vexLoadInvites(guild);
+  }
+
+  console.log("VEX Guard Invite System is ready!");
+});
+
+// تحديث البيانات عند إنشاء أو حذف دعوة
+client.on("inviteCreate", async invite => {
+  await vexLoadInvites(invite.guild);
+});
+
+client.on("inviteDelete", async invite => {
+  await vexLoadInvites(invite.guild);
+});
+
+// معرفة الدعوة التي استُخدمت
+client.on("guildMemberAdd", async member => {
+  try {
+    const oldInvites =
+      vexInviteCache.get(member.guild.id) || new Map();
+
+    const newInvites = await member.guild.invites.fetch();
+
+    const usedInvite = newInvites.find(invite => {
+      return (invite.uses || 0) >
+        (oldInvites.get(invite.code) || 0);
+    });
+
+    vexInviteCache.set(
+      member.guild.id,
+      new Map(
+        newInvites.map(invite => [
+          invite.code,
+          invite.uses || 0
+        ])
+      )
+    );
+
+    if (!usedInvite || !usedInvite.inviter) return;
+
+    const guildId = member.guild.id;
+    const inviterId = usedInvite.inviter.id;
+
+    if (!vexInviteCounts.has(guildId)) {
+      vexInviteCounts.set(guildId, new Map());
+    }
+
+    const counts = vexInviteCounts.get(guildId);
+
+    counts.set(
+      inviterId,
+      (counts.get(inviterId) || 0) + 1
+    );
+
+    console.log(
+      `${member.user.tag} joined using ${usedInvite.code}`
+    );
+  } catch (error) {
+    console.log("Invite tracking error:", error.message);
+  }
+});
+
+// الأمر النصي: انفايت أو انفايت @العضو
+client.on("messageCreate", async message => {
+  if (!message.guild || message.author.bot) return;
+
+  const args = message.content.trim().split(/\s+/);
+
+  if (!["انفايت", "!انفايت"].includes(args[0].toLowerCase())) {
+    return;
+  }
+
+  const target = message.mentions.users.first() || message.author;
+
+  const count =
+    vexInviteCounts.get(message.guild.id)?.get(target.id) || 0;
+
+  await message.reply(
+    `**إحصائيات الإنفايت**\n` +
+    `العضو: ${target}\n` +
+    `عدد الدعوات المسجلة: **${count}**`
+  );
+});
+
+// =============== END INVITE SYSTEM ===============
 // ==================== تسجيل الأوامر ثم تشغيل البوت ====================
 
 (async () => {
