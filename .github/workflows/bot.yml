@@ -1,37 +1,12 @@
 
-name: VEX Guard
+name: Stop VEX Guard
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: write
 
 jobs:
-  bot:
+  stop:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Discord.js
-        run: npm install discord.js
-
-      - name: Start VEX Guard
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          GUILD_ID: ${{ secrets.GUILD_ID }}
-          LOG_CHANNEL_ID: ${{ secrets.LOG_CHANNEL_ID }}
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node vex.js
+      - name: Farewell
+        run: echo "نَمْ في بَرْدٍ وسَلام يا بوت السيرفر 🕊️"
